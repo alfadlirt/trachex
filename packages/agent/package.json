@@ -11,7 +11,19 @@
     "test": "tsx --test src/*.test.ts"
   },
   "devDependencies": {
+    "tsx": "^4.23.0",
     "typescript": "^7.0.2",
-    "tsx": "^4.23.0"
+    "@types/better-sqlite3": "^7.6.13"
+  },
+  "dependencies": {
+    "@anvia/core": "1.1.2",
+    "@anvia/lens": "1.1.2",
+    "@anvia/logger": "1.1.2",
+    "@anvia/openai": "1.1.2",
+    "@trachex/domain": "workspace:*",
+    "@trachex/shared": "workspace:*",
+    "@trachex/storage-sqlite": "workspace:*",
+    "better-sqlite3": "^12.2.0",
+    "zod": "^4.5.4"
   }
 }

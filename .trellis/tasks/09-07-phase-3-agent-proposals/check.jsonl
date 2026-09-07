@@ -1,0 +1,3 @@
+{"file": "docs/architecture.md", "reason": "Anvia integration, proposal lifecycle, agent tools, observability"}
+{"file": "docs/implementation-plan.md", "reason": "Phase 3 deliverables and acceptance criteria"}
+{"file": "docs/decisions/003-proposals-before-apply.md", "reason": "Agent output is pending proposals; approval is the only apply path"}

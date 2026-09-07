@@ -11,3 +11,11 @@ allowBuilds:
   sharp: true
   better-sqlite3: true
   protobufjs: true
+
+minimumReleaseAgeExclude:
+  - '@anvia/core@1.1.2'
+  - '@anvia/lens@1.1.2'
+  - '@anvia/logger@1.1.2'
+  - '@anvia/memory-sqlite@1.1.2'
+  - '@anvia/openai@1.1.2'
+  - '@anvia/otel@1.1.2'
