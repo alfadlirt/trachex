@@ -13,5 +13,14 @@
   "devDependencies": {
     "typescript": "^7.0.2",
     "tsx": "^4.23.0"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.0.10",
+    "@trachex/agent": "workspace:*",
+    "@trachex/domain": "workspace:*",
+    "@trachex/shared": "workspace:*",
+    "@trachex/storage-sqlite": "workspace:*",
+    "hono": "^4.13.7",
+    "zod": "^4.5.4"
   }
 }

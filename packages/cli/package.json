@@ -15,7 +15,8 @@
     "@trachex/domain": "workspace:*",
     "@trachex/shared": "workspace:*",
     "@trachex/storage-sqlite": "workspace:*",
-    "@trachex/mcp": "workspace:*"
+    "@trachex/mcp": "workspace:*",
+    "@trachex/api": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^7.0.2",

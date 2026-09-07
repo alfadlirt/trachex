@@ -1,4 +1,5 @@
 import { PipelineError } from '@trachex/agent';
+import { startDashboard } from '@trachex/api';
 import { DomainError } from '@trachex/domain';
 import { runMcpServer } from '@trachex/mcp';
 import { openApp } from './app.ts';
@@ -289,7 +290,19 @@ export async function runCli(env: CliEnv): Promise<number> {
         await runMcpServer({ projectSlug: project, appDir: ctx.appDir });
         return EXIT_OK;
       }
-      case 'dashboard':
+      case 'dashboard': {
+        const { values } = parseCommandArgs([sub, ...rest].filter(Boolean) as string[], {
+          project: { type: 'string' },
+          port: { type: 'string' },
+        });
+        void resolveProject(values);
+        const port = typeof values.port === 'string' ? Number(values.port) : undefined;
+        await startDashboard({
+          appDir: ctx.appDir,
+          ...(port !== undefined ? { port } : {}),
+        });
+        return EXIT_OK;
+      }
       case 'infra': {
         print(`${command} is not implemented yet (planned in a later phase)`);
         break;

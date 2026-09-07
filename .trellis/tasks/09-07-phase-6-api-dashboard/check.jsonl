@@ -1,0 +1,4 @@
+{"file": "docs/architecture.md", "reason": "API surface, runtime topology, security (localhost, no SQLite in browser)"}
+{"file": "docs/implementation-plan.md", "reason": "Phase 6 deliverables and acceptance criteria"}
+{"file": "docs/ux.md", "reason": "Ticket canvas IA, proposal review, adjustment flow, chat, responsive layout"}
+{"file": "docs/decisions/004-blocknote-boundary.md", "reason": "BlockNote only for adjustment notes, not canonical records"}
