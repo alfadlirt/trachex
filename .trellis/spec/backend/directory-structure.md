@@ -70,3 +70,23 @@ Each workspace package has the same shape:
 - Cross-package import proof: `packages/cli/src/index.ts` imports
   `{ isRecord }` from `@trachex/shared` (declared as `"@trachex/shared":
   "workspace:*"` in `packages/cli/package.json`).
+
+## CLI package (`packages/cli`)
+
+- `src/index.ts` — command router: `runCli({ argv, appDir })` returns an exit
+  code; maps `CliError`/`DomainError`/`PipelineError` to 0/2/3/1. Handles
+  `--help`.
+- `src/commands/*.ts` — one module per command group (project, ticket,
+  adjustment, proposal, check, export). Handlers throw domain
+  `NotFoundError`/`InvalidOperationError` so the router maps them to exit 3.
+- `src/args.ts` — wraps `node:util` `parseArgs` (no CLI framework).
+- `src/context.ts` — active-project resolution: explicit `--project` wins,
+  else `config.json` `activeProject` (ADR 002).
+- `src/export.ts` — Markdown/JSON serializers over `buildExportSummary`
+  (reused by MCP/API later).
+- `src/io.ts` — `print`/`printJson`/`confirm`; `confirm` is injectable via
+  `setConfirmImpl` for tests.
+
+Router gotcha: commands whose first positional is NOT a subcommand (`check`,
+`adjustment`, `export`) must parse `[sub, ...rest]` — `sub` is the first
+positional, not a subcommand.

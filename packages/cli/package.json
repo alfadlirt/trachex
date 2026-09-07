@@ -11,7 +11,10 @@
     "test": "tsx --test src/*.test.ts"
   },
   "dependencies": {
-    "@trachex/shared": "workspace:*"
+    "@trachex/agent": "workspace:*",
+    "@trachex/domain": "workspace:*",
+    "@trachex/shared": "workspace:*",
+    "@trachex/storage-sqlite": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^7.0.2",

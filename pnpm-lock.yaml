@@ -283,9 +283,18 @@ importers:
 
   packages/cli:
     dependencies:
+      '@trachex/agent':
+        specifier: workspace:*
+        version: link:../agent
+      '@trachex/domain':
+        specifier: workspace:*
+        version: link:../domain
       '@trachex/shared':
         specifier: workspace:*
         version: link:../shared
+      '@trachex/storage-sqlite':
+        specifier: workspace:*
+        version: link:../storage-sqlite
     devDependencies:
       tsx:
         specifier: ^4.23.0

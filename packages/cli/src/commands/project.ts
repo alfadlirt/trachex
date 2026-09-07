@@ -1,0 +1,58 @@
+import { createProject, NotFoundError, registerRepository, type UnitOfWork } from '@trachex/domain';
+import { exportProjectArchive } from '@trachex/storage-sqlite';
+import type { AppContext } from '../app.ts';
+import { readGlobalConfig, writeGlobalConfig } from '../context.ts';
+import { print, printJson } from '../io.ts';
+
+export async function projectCreate(uow: UnitOfWork, args: { slug: string; name: string }) {
+  const result = await createProject(uow, { slug: args.slug, name: args.name });
+  printJson({ id: result.id, slug: result.slug });
+}
+
+export async function projectUse(ctx: AppContext, args: { slug: string }) {
+  const project = await ctx.uow.projects.findBySlug(args.slug);
+  if (!project) {
+    throw new NotFoundError('project', args.slug);
+  }
+  const config = readGlobalConfig(ctx.appDir);
+  writeGlobalConfig({ ...config, activeProject: args.slug }, ctx.appDir);
+  print(`active project: ${args.slug}`);
+}
+
+export async function projectList(uow: UnitOfWork) {
+  const projects = await uow.projects.list();
+  printJson(projects);
+}
+
+export async function repoAdd(
+  uow: UnitOfWork,
+  args: {
+    project: string;
+    name: string;
+    path: string;
+  },
+) {
+  const project = await uow.projects.findBySlug(args.project);
+  if (!project) {
+    throw new NotFoundError('project', args.project);
+  }
+  await registerRepository(uow, {
+    projectId: project.id,
+    slug: args.name,
+    path: args.path,
+  });
+  print(`repository ${args.name} added to ${args.project}`);
+}
+
+export async function projectExport(ctx: AppContext, args: { slug: string; out: string }) {
+  const project = await ctx.uow.projects.findBySlug(args.slug);
+  if (!project) {
+    throw new NotFoundError('project', args.slug);
+  }
+  const manifest = exportProjectArchive(ctx.db, {
+    projectId: project.id,
+    sourcesRoot: `${ctx.appDir}/projects/${project.id}/sources`,
+    outDir: args.out,
+  });
+  print(`archive written: ${manifest}`);
+}

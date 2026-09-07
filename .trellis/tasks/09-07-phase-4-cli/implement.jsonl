@@ -1,0 +1,4 @@
+{"file": "docs/architecture.md", "reason": "CLI contract, security, global registry, export structure"}
+{"file": "docs/implementation-plan.md", "reason": "Phase 4 deliverables and acceptance criteria"}
+{"file": "docs/decisions/002-global-project-registry.md", "reason": "Active-project shortcut + explicit --project wins"}
+{"file": "docs/decisions/003-proposals-before-apply.md", "reason": "ticket new stores pending proposals; approval is explicit"}
