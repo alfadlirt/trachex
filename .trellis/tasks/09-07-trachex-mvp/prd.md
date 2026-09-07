@@ -87,7 +87,7 @@ Build the Trachex local-first development traceability layer per `docs/` (archit
 - Dashboard works with SQLite and no Docker; browser never accesses SQLite directly; dashboard and CLI run concurrently.
 - Agent output cannot directly mutate canonical requirements; failed/malformed model output is retained as an error without corrupting the ticket.
 - MCP cannot cross the selected project boundary; no item is marked complete without explicit human confirmation.
-- One real ticket completes the full flow; all adjustments have source and timestamps; direct conflicts are detected and require approval; export includes timeline, current checklist, impacts, scenarios, and history.
+- [x] One real ticket completes the full flow; all adjustments have source and timestamps; direct conflicts are detected and require approval; export includes timeline, current checklist, impacts, scenarios, and history. (Verified: `pnpm eval` → 8/8 harness + ACCEPTANCE PASS)
 
 ## Release gate (docs/implementation-plan.md Phase 8)
 
