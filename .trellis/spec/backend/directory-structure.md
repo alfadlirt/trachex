@@ -90,3 +90,21 @@ Each workspace package has the same shape:
 Router gotcha: commands whose first positional is NOT a subcommand (`check`,
 `adjustment`, `export`) must parse `[sub, ...rest]` — `sub` is the first
 positional, not a subcommand.
+
+## MCP package (`packages/mcp`)
+
+- `src/tools.ts` — tool registry: `{ name, description, inputSchema, handler }`.
+  All 11 contract tools (5 read, 6 mutation). Every handler enforces project
+  scoping via `requireScopedRequirement`/`requireScopedProposal` (throw
+  `ScopingError` → stable `SCOPING` code).
+- `src/server.ts` — `createMcpServer` wires `ListToolsRequestSchema` +
+  `CallToolRequestSchema`; `handleToolCall(ctx, name, args)` is the testable
+  dispatch function returning the SDK `CallToolResult`.
+- `src/run.ts` — `runMcpServer` uses `StdioServerTransport`; CLI `mcp` command
+  calls it.
+- `check_item` schema requires `confirm: z.literal(true)`; without it the
+  schema rejects (`INVALID_INPUT`).
+- Results: `{ content: [{ type: 'text', text: JSON.stringify(payload) }] }`;
+  errors: `{ isError: true, content: [{ type: 'text', text: JSON.stringify({ code, message }) }] }`.
+- Export serializers live in `packages/domain/src/export.ts` (not cli) so
+  cli/mcp/api share them without a dependency cycle.

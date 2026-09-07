@@ -11,7 +11,17 @@
     "test": "tsx --test src/*.test.ts"
   },
   "devDependencies": {
+    "tsx": "^4.23.0",
     "typescript": "^7.0.2",
-    "tsx": "^4.23.0"
+    "@types/better-sqlite3": "^7.6.13"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "zod": "^4.5.4",
+    "@trachex/agent": "workspace:*",
+    "@trachex/domain": "workspace:*",
+    "@trachex/shared": "workspace:*",
+    "@trachex/storage-sqlite": "workspace:*",
+    "better-sqlite3": "^12.2.0"
   }
 }

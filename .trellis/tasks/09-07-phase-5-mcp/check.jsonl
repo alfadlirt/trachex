@@ -1,0 +1,4 @@
+{"file": "docs/architecture.md", "reason": "MCP contract, tool list, scoping, confirmation"}
+{"file": "docs/implementation-plan.md", "reason": "Phase 5 deliverables and acceptance criteria"}
+{"file": "docs/decisions/003-proposals-before-apply.md", "reason": "check_item requires explicit confirmation"}
+{"file": "docs/decisions/005-stdio-mcp.md", "reason": "Stdio server scoped to one project"}

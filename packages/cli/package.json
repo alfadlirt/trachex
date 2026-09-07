@@ -14,7 +14,8 @@
     "@trachex/agent": "workspace:*",
     "@trachex/domain": "workspace:*",
     "@trachex/shared": "workspace:*",
-    "@trachex/storage-sqlite": "workspace:*"
+    "@trachex/storage-sqlite": "workspace:*",
+    "@trachex/mcp": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^7.0.2",
