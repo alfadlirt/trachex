@@ -1,0 +1,4 @@
+{"file": "docs/architecture.md", "reason": "Domain model, storage adapters, global layout, ADR contracts for schema and repositories"}
+{"file": "docs/decisions/001-sqlite-first.md", "reason": "SQLite canonical, no SQLite types in domain, future PG adapter"}
+{"file": "docs/decisions/002-global-project-registry.md", "reason": "Global registry, multi-repo projects, archives for portability"}
+{"file": "docs/decisions/003-proposals-before-apply.md", "reason": "Proposal/version tables and approval-only apply path in schema"}

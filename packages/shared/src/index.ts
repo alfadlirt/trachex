@@ -7,3 +7,5 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
 export function assertNever(_value: never, message = 'unreachable code path'): never {
   throw new Error(message);
 }
+
+export * from './paths.ts';

@@ -1,0 +1,492 @@
+import type {
+  CompletionAudit,
+  Impact,
+  ImpactKind,
+  Proposal,
+  ProposalVersion,
+  Requirement,
+  Scenario,
+  Source,
+  SourceType,
+  Ticket,
+} from './entities.ts';
+import { ConflictError, InvalidOperationError, NotFoundError } from './errors.ts';
+import { newId, nowIso } from './ids.ts';
+import type { UnitOfWork } from './repositories.ts';
+
+export interface CreateProjectInput {
+  slug: string;
+  name: string;
+  description?: string;
+}
+
+export interface RegisterRepositoryInput {
+  projectId: string;
+  slug: string;
+  serviceName?: string;
+  url?: string;
+  path: string;
+}
+
+export interface CreateTicketInput {
+  projectId: string;
+  key: string;
+  title: string;
+  description?: string;
+}
+
+export interface AddSourceInput {
+  ticketId: string;
+  type: SourceType;
+  attribution?: string;
+  sourceEventAt?: string;
+  snapshotId?: string;
+  location?: string;
+}
+
+export interface RequirementDraft {
+  title: string;
+  description?: string;
+  sourceLocation?: string;
+  parentLabel?: string;
+  impacts?: { kind: ImpactKind; value: string }[];
+  scenarios?: string[];
+  supersedes?: string[];
+}
+
+export interface ExtractionOutput {
+  kind: 'extraction';
+  requirements: RequirementDraft[];
+}
+
+export interface ReconciliationOutput {
+  kind: 'reconciliation';
+  create: RequirementDraft[];
+}
+
+export type ProposalOutput = ExtractionOutput | ReconciliationOutput;
+
+export interface CreateProposalInput {
+  ticketId: string;
+  kind: Proposal['kind'];
+  sourceId?: string;
+  output: ProposalOutput;
+}
+
+export interface ApproveProposalInput {
+  proposalId: string;
+  editedOutput?: ProposalOutput;
+}
+
+export interface CheckRequirementInput {
+  requirementId: string;
+  actorType: CompletionAudit['actorType'];
+  actorId?: string;
+  note?: string;
+}
+
+export interface ExportSummary {
+  projectSlug: string;
+  ticketKey: string;
+  ticketTitle: string;
+  timeline: TimelineEvent[];
+  checklist: Requirement[];
+  impacts: Impact[];
+  scenarios: Scenario[];
+  history: Requirement[];
+}
+
+export interface TimelineEvent {
+  at: string;
+  kind: 'source' | 'proposal' | 'approval' | 'completion';
+  description: string;
+}
+
+export async function createProject(
+  uow: UnitOfWork,
+  input: CreateProjectInput,
+): Promise<{ id: string; slug: string }> {
+  const slug = input.slug.trim().toLowerCase();
+  if (slug.length === 0) {
+    throw new InvalidOperationError('project slug must not be empty');
+  }
+  const existing = await uow.projects.findBySlug(slug);
+  if (existing) {
+    throw new ConflictError(`project slug already exists: ${slug}`);
+  }
+  const now = nowIso();
+  const project = {
+    id: newId(),
+    slug,
+    name: input.name.trim(),
+    description: input.description?.trim() || null,
+    createdAt: now,
+    updatedAt: now,
+  };
+  await uow.projects.create(project);
+  return { id: project.id, slug: project.slug };
+}
+
+export async function registerRepository(
+  uow: UnitOfWork,
+  input: RegisterRepositoryInput,
+): Promise<void> {
+  const project = await uow.projects.findById(input.projectId);
+  if (!project) {
+    throw new NotFoundError('project', input.projectId);
+  }
+  const existing = await uow.repositories.findByProjectAndSlug(input.projectId, input.slug);
+  if (existing) {
+    throw new ConflictError(`repository slug already exists in project: ${input.slug}`);
+  }
+  const now = nowIso();
+  const repository = {
+    id: newId(),
+    projectId: input.projectId,
+    slug: input.slug,
+    serviceName: input.serviceName?.trim() || null,
+    url: input.url?.trim() || null,
+    createdAt: now,
+    updatedAt: now,
+  };
+  await uow.repositories.create(repository);
+  await uow.repositories.addPath({
+    id: newId(),
+    repositoryId: repository.id,
+    path: input.path,
+    validFrom: now,
+    validTo: null,
+  });
+}
+
+export async function createTicket(uow: UnitOfWork, input: CreateTicketInput): Promise<Ticket> {
+  const project = await uow.projects.findById(input.projectId);
+  if (!project) {
+    throw new NotFoundError('project', input.projectId);
+  }
+  const key = input.key.trim();
+  if (key.length === 0) {
+    throw new InvalidOperationError('ticket key must not be empty');
+  }
+  const existing = await uow.tickets.findByProjectAndKey(input.projectId, key);
+  if (existing) {
+    throw new ConflictError(`ticket key already exists in project: ${key}`);
+  }
+  const now = nowIso();
+  const ticket: Ticket = {
+    id: newId(),
+    projectId: input.projectId,
+    key,
+    title: input.title.trim(),
+    description: input.description?.trim() || null,
+    createdAt: now,
+    updatedAt: now,
+  };
+  await uow.tickets.create(ticket);
+  return ticket;
+}
+
+export async function addSource(uow: UnitOfWork, input: AddSourceInput): Promise<Source> {
+  const ticket = await uow.tickets.findById(input.ticketId);
+  if (!ticket) {
+    throw new NotFoundError('ticket', input.ticketId);
+  }
+  const source: Source = {
+    id: newId(),
+    ticketId: input.ticketId,
+    type: input.type,
+    attribution: input.attribution?.trim() || null,
+    sourceEventAt: input.sourceEventAt ?? null,
+    ingestedAt: nowIso(),
+    snapshotId: input.snapshotId ?? null,
+    location: input.location?.trim() || null,
+  };
+  await uow.sources.create(source);
+  return source;
+}
+
+export async function createProposal(
+  uow: UnitOfWork,
+  input: CreateProposalInput,
+): Promise<Proposal> {
+  const ticket = await uow.tickets.findById(input.ticketId);
+  if (!ticket) {
+    throw new NotFoundError('ticket', input.ticketId);
+  }
+  const now = nowIso();
+  const proposal: Proposal = {
+    id: newId(),
+    ticketId: input.ticketId,
+    kind: input.kind,
+    status: 'pending',
+    sourceId: input.sourceId ?? null,
+    createdAt: now,
+    updatedAt: now,
+  };
+  await uow.proposals.create(proposal);
+  const version: ProposalVersion = {
+    id: newId(),
+    proposalId: proposal.id,
+    version: 1,
+    modelOutput: JSON.stringify(input.output),
+    editedOutput: null,
+    reviewedAt: null,
+    createdAt: now,
+  };
+  await uow.proposals.addVersion(version);
+  return proposal;
+}
+
+export async function editProposal(
+  uow: UnitOfWork,
+  input: { proposalId: string; editedOutput: ProposalOutput },
+): Promise<ProposalVersion> {
+  const proposal = await uow.proposals.findById(input.proposalId);
+  if (!proposal) {
+    throw new NotFoundError('proposal', input.proposalId);
+  }
+  if (proposal.status !== 'pending') {
+    throw new InvalidOperationError('only pending proposals can be edited');
+  }
+  const versions = await uow.proposals.listVersions(proposal.id);
+  const original = versions[0];
+  if (!original) {
+    throw new InvalidOperationError('proposal has no versions');
+  }
+  const nextVersion = versions.length + 1;
+  const version: ProposalVersion = {
+    id: newId(),
+    proposalId: proposal.id,
+    version: nextVersion,
+    modelOutput: original.modelOutput,
+    editedOutput: JSON.stringify(input.editedOutput),
+    reviewedAt: null,
+    createdAt: nowIso(),
+  };
+  await uow.proposals.addVersion(version);
+  return version;
+}
+
+export async function approveProposal(uow: UnitOfWork, input: ApproveProposalInput): Promise<void> {
+  const proposal = await uow.proposals.findById(input.proposalId);
+  if (!proposal) {
+    throw new NotFoundError('proposal', input.proposalId);
+  }
+  if (proposal.status !== 'pending') {
+    throw new InvalidOperationError(`proposal is not pending: ${proposal.status}`);
+  }
+  const versions = await uow.proposals.listVersions(proposal.id);
+  const latest = versions.at(-1);
+  if (!latest) {
+    throw new InvalidOperationError('proposal has no versions');
+  }
+  const effectiveOutput: ProposalOutput = input.editedOutput
+    ? input.editedOutput
+    : latest.editedOutput
+      ? (JSON.parse(latest.editedOutput) as ProposalOutput)
+      : (JSON.parse(latest.modelOutput) as ProposalOutput);
+  const output = effectiveOutput;
+
+  const now = nowIso();
+  const ticket = await uow.tickets.findById(proposal.ticketId);
+  if (!ticket) {
+    throw new NotFoundError('ticket', proposal.ticketId);
+  }
+
+  if (output.kind === 'extraction') {
+    for (const draft of output.requirements) {
+      await createRequirementFromDraft(uow, ticket.projectId, ticket.id, proposal, draft, now);
+    }
+  } else if (output.kind === 'reconciliation') {
+    for (const draft of output.create) {
+      const created = await createRequirementFromDraft(
+        uow,
+        ticket.projectId,
+        ticket.id,
+        proposal,
+        draft,
+        now,
+      );
+      for (const targetId of draft.supersedes ?? []) {
+        const target = await uow.requirements.findById(targetId);
+        if (!target) {
+          throw new InvalidOperationError(`cannot supersede unknown requirement: ${targetId}`);
+        }
+        if (target.ticketId !== ticket.id) {
+          throw new InvalidOperationError('cannot supersede a requirement from another ticket');
+        }
+        const updated: Requirement = { ...target, lifecycleStatus: 'superseded', updatedAt: now };
+        await uow.requirements.update(updated);
+        await uow.requirements.addRelationship({
+          id: newId(),
+          fromRequirementId: created.id,
+          toRequirementId: target.id,
+          type: 'supersedes',
+          createdAt: now,
+        });
+      }
+    }
+  }
+
+  await uow.proposals.update({ ...proposal, status: 'approved', updatedAt: now });
+  await uow.proposals.addVersion({
+    id: newId(),
+    proposalId: proposal.id,
+    version: versions.length + 1,
+    modelOutput: latest.modelOutput,
+    editedOutput: latest.editedOutput,
+    reviewedAt: now,
+    createdAt: now,
+  });
+}
+
+async function createRequirementFromDraft(
+  uow: UnitOfWork,
+  projectId: string,
+  ticketId: string,
+  proposal: Proposal,
+  draft: RequirementDraft,
+  now: string,
+): Promise<Requirement> {
+  const requirement: Requirement = {
+    id: newId(),
+    projectId,
+    ticketId,
+    title: draft.title.trim(),
+    description: draft.description?.trim() || null,
+    sourceId: proposal.sourceId,
+    sourceLocation: draft.sourceLocation?.trim() || null,
+    lifecycleStatus: 'active',
+    devStatus: 'unchecked',
+    parentLabel: draft.parentLabel?.trim() || null,
+    createdAt: now,
+    updatedAt: now,
+  };
+  await uow.requirements.create(requirement);
+  for (const impact of draft.impacts ?? []) {
+    const row: Impact = {
+      id: newId(),
+      requirementId: requirement.id,
+      kind: impact.kind,
+      value: impact.value.trim(),
+      createdAt: now,
+    };
+    await uow.requirements.addImpact(row);
+  }
+  for (const text of draft.scenarios ?? []) {
+    const row: Scenario = {
+      id: newId(),
+      requirementId: requirement.id,
+      text: text.trim(),
+      reviewed: false,
+      createdAt: now,
+    };
+    await uow.requirements.addScenario(row);
+  }
+  return requirement;
+}
+
+export async function rejectProposal(
+  uow: UnitOfWork,
+  input: { proposalId: string },
+): Promise<void> {
+  const proposal = await uow.proposals.findById(input.proposalId);
+  if (!proposal) {
+    throw new NotFoundError('proposal', input.proposalId);
+  }
+  if (proposal.status !== 'pending') {
+    throw new InvalidOperationError(`proposal is not pending: ${proposal.status}`);
+  }
+  const now = nowIso();
+  await uow.proposals.update({ ...proposal, status: 'rejected', updatedAt: now });
+}
+
+export async function checkRequirement(
+  uow: UnitOfWork,
+  input: CheckRequirementInput,
+): Promise<CompletionAudit> {
+  const requirement = await uow.requirements.findById(input.requirementId);
+  if (!requirement) {
+    throw new NotFoundError('requirement', input.requirementId);
+  }
+  const now = nowIso();
+  const audit: CompletionAudit = {
+    id: newId(),
+    requirementId: requirement.id,
+    actorType: input.actorType,
+    actorId: input.actorId?.trim() || null,
+    note: input.note?.trim() || null,
+    checkedAt: now,
+  };
+  await uow.completionAudits.create(audit);
+  await uow.requirements.update({ ...requirement, devStatus: 'checked', updatedAt: now });
+  return audit;
+}
+
+export async function buildExportSummary(
+  uow: UnitOfWork,
+  input: { projectId: string; ticketKey: string },
+): Promise<ExportSummary> {
+  const project = await uow.projects.findById(input.projectId);
+  if (!project) {
+    throw new NotFoundError('project', input.projectId);
+  }
+  const ticket = await uow.tickets.findByProjectAndKey(input.projectId, input.ticketKey);
+  if (!ticket) {
+    throw new NotFoundError('ticket', input.ticketKey);
+  }
+  const requirements = await uow.requirements.listByTicket(ticket.id);
+  const checklist = requirements.filter((r) => r.lifecycleStatus === 'active');
+  const history = requirements.filter((r) => r.lifecycleStatus === 'superseded');
+  const impacts = await uow.requirements.listImpactsByTicket(ticket.id);
+  const scenarios = await uow.requirements.listScenariosByTicket(ticket.id);
+  const sources = await uow.sources.listByTicket(ticket.id);
+  const proposals = await uow.proposals.listByTicket(ticket.id);
+
+  const timeline: TimelineEvent[] = [];
+  for (const source of sources) {
+    timeline.push({
+      at: source.ingestedAt,
+      kind: 'source',
+      description: `source ${source.type}${source.attribution ? ` from ${source.attribution}` : ''}`,
+    });
+  }
+  for (const proposal of proposals) {
+    timeline.push({
+      at: proposal.createdAt,
+      kind: 'proposal',
+      description: `proposal ${proposal.kind} ${proposal.status}`,
+    });
+    if (proposal.status === 'approved') {
+      timeline.push({
+        at: proposal.updatedAt,
+        kind: 'approval',
+        description: `approved proposal ${proposal.kind}`,
+      });
+    }
+  }
+  const audits = await Promise.all(
+    requirements.map((r) => uow.completionAudits.listByRequirement(r.id)),
+  );
+  for (const list of audits) {
+    for (const audit of list) {
+      timeline.push({
+        at: audit.checkedAt,
+        kind: 'completion',
+        description: `checked ${audit.requirementId} by ${audit.actorType}`,
+      });
+    }
+  }
+  timeline.sort((a, b) => a.at.localeCompare(b.at));
+
+  return {
+    projectSlug: project.slug,
+    ticketKey: ticket.key,
+    ticketTitle: ticket.title,
+    timeline,
+    checklist,
+    impacts,
+    scenarios,
+    history,
+  };
+}

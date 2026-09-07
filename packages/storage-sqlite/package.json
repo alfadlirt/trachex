@@ -8,9 +8,15 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/index.test.ts"
+    "test": "tsx --test src/*.test.ts"
+  },
+  "dependencies": {
+    "@trachex/domain": "workspace:*",
+    "@trachex/shared": "workspace:*",
+    "better-sqlite3": "^12.2.0"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "typescript": "^7.0.2",
     "tsx": "^4.23.0"
   }
