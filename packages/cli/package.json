@@ -1,0 +1,20 @@
+{
+  "name": "@trachex/cli",
+  "version": "0.1.0",
+  "description": "Trachex command-line interface.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test src/index.test.ts"
+  },
+  "dependencies": {
+    "@trachex/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "tsx": "^4.23.0"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "name": "@trachex/storage-sqlite",
+  "version": "0.1.0",
+  "description": "SQLite storage adapter: schema, migrations, repositories, FTS5 (ADR 001).",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test src/index.test.ts"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "tsx": "^4.23.0"
+  }
+}

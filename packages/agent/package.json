@@ -1,0 +1,17 @@
+{
+  "name": "@trachex/agent",
+  "version": "0.1.0",
+  "description": "Anvia agent, prompts, typed tools, and retrieval for Trachex.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test src/index.test.ts"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "tsx": "^4.23.0"
+  }
+}

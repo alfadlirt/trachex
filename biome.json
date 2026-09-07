@@ -1,0 +1,40 @@
+{
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      "suspicious": {
+        "useBiomeIgnoreFolder": "off"
+      }
+    }
+  },
+  "assist": { "actions": { "source": { "organizeImports": "on" } } },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single",
+      "semicolons": "always",
+      "trailingCommas": "all"
+    }
+  },
+  "files": {
+    "ignoreUnknown": true,
+    "includes": [
+      "**",
+      "!**/node_modules/**",
+      "!**/dist/**",
+      "!**/.turbo/**",
+      "!**/.trellis/**",
+      "!**/.opencode/**",
+      "!**/.claude/**",
+      "!**/.agents/**",
+      "!**/routeTree.gen.ts",
+      "!**/src/generated/**"
+    ]
+  }
+}

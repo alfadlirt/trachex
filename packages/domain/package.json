@@ -1,0 +1,17 @@
+{
+  "name": "@trachex/domain",
+  "version": "0.1.0",
+  "description": "Trachex domain: entities, commands, repository interfaces, and invariants.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test src/index.test.ts"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "tsx": "^4.23.0"
+  }
+}

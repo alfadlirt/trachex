@@ -1,0 +1,17 @@
+{
+  "name": "@trachex/api",
+  "version": "0.1.0",
+  "description": "Hono local API and static asset serving for Trachex.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test src/index.test.ts"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "tsx": "^4.23.0"
+  }
+}

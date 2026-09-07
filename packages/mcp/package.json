@@ -1,0 +1,17 @@
+{
+  "name": "@trachex/mcp",
+  "version": "0.1.0",
+  "description": "Stdio MCP server and tool schemas for Trachex (ADR 005).",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test src/index.test.ts"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "tsx": "^4.23.0"
+  }
+}
