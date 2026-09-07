@@ -1,0 +1,3 @@
+{"file": "docs/architecture.md", "reason": "Retrieval lifecycle, snapshot immutability, FTS5/Qdrant contract"}
+{"file": "docs/implementation-plan.md", "reason": "Phase 2 deliverables and acceptance criteria"}
+{"file": "docs/decisions/001-sqlite-first.md", "reason": "SQLite canonical; Qdrant derived and rebuildable"}

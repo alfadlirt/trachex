@@ -60,3 +60,20 @@ Connection manager (`src/connection.ts`):
   Node 20+ floor holds.
 - **Platform-specific path assertions**: `node:path` `join` uses the host
   separator; assert `startsWith`/`endsWith` for cross-platform tests.
+
+## Source ingestion & retrieval (Phase 2)
+
+- `ingestSource` (domain) orchestrates snapshot + chunks + source via the
+  UnitOfWork; it takes a `writeSnapshotFile` callback so the domain stays free
+  of filesystem specifics. `ingestFile` (storage-sqlite) writes snapshot
+  content under `sources/<snapshotId>` and delegates to it.
+- Immutability: re-ingesting changed content creates a NEW snapshot (new hash)
+  and preserves the old; identical content reuses the snapshot via
+  `findByProjectAndHash` (dedup) but still records a new `Source` row.
+- Chunk ids are content-addressed: `sha256(relPath:index:text)` — deterministic
+  and stable across re-ingestion and Qdrant rebuilds.
+- Search contract: `SearchRepository.search(query, projectId, limit)` returns
+  `{ chunkId, snapshotId, projectId, content, location, relPath, score }`.
+  FTS5 is the default adapter; Qdrant is derived and rebuilt per-chunk with the
+  same chunk ids (`rebuildQdrantFromSnapshots`). Never let Qdrant become the
+  canonical store (ADR 001).

@@ -8,4 +8,6 @@ export function assertNever(_value: never, message = 'unreachable code path'): n
   throw new Error(message);
 }
 
+export * from './chunk.ts';
+export * from './hash.ts';
 export * from './paths.ts';

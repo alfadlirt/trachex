@@ -264,6 +264,10 @@ importers:
         version: 7.0.2
 
   packages/domain:
+    dependencies:
+      '@trachex/shared':
+        specifier: workspace:*
+        version: link:../shared
     devDependencies:
       tsx:
         specifier: ^4.23.0

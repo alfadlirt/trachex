@@ -10,6 +10,9 @@
     "typecheck": "tsc --noEmit",
     "test": "tsx --test src/*.test.ts"
   },
+  "dependencies": {
+    "@trachex/shared": "workspace:*"
+  },
   "devDependencies": {
     "typescript": "^7.0.2",
     "tsx": "^4.23.0"

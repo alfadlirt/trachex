@@ -413,6 +413,13 @@ export class SqliteSnapshotRepository implements SnapshotRepository {
     return row ? snapshotFromRow(row) : null;
   }
 
+  async findByProjectAndHash(projectId: string, contentHash: string): Promise<Snapshot | null> {
+    const row = this.db
+      .prepare('SELECT * FROM snapshots WHERE project_id = ? AND content_hash = ?')
+      .get(projectId, contentHash) as Row | undefined;
+    return row ? snapshotFromRow(row) : null;
+  }
+
   async listByProject(projectId: string): Promise<Snapshot[]> {
     const rows = this.db
       .prepare('SELECT * FROM snapshots WHERE project_id = ? ORDER BY created_at')

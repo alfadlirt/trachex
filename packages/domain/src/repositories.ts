@@ -46,6 +46,7 @@ export interface TicketRepository {
 export interface SnapshotRepository {
   create(snapshot: Snapshot): Promise<Snapshot>;
   findById(id: string): Promise<Snapshot | null>;
+  findByProjectAndHash(projectId: string, contentHash: string): Promise<Snapshot | null>;
   listByProject(projectId: string): Promise<Snapshot[]>;
   listByTicketSource(ticketId: string): Promise<Snapshot[]>;
 }

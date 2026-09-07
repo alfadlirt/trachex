@@ -124,6 +124,9 @@ class MemoryUnitOfWork implements UnitOfWork {
       return snapshot;
     },
     findById: async (id) => this.data.snapshots.find((s) => s.id === id) ?? null,
+    findByProjectAndHash: async (projectId, contentHash) =>
+      this.data.snapshots.find((s) => s.projectId === projectId && s.contentHash === contentHash) ??
+      null,
     listByProject: async (projectId) =>
       this.data.snapshots.filter((s) => s.projectId === projectId),
     listByTicketSource: async (ticketId) => {
