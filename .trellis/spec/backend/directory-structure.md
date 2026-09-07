@@ -108,3 +108,20 @@ positional, not a subcommand.
   errors: `{ isError: true, content: [{ type: 'text', text: JSON.stringify({ code, message }) }] }`.
 - Export serializers live in `packages/domain/src/export.ts` (not cli) so
   cli/mcp/api share them without a dependency cycle.
+
+## Packaging (`packages/trachex`)
+
+- `packages/trachex` is the publishable composition package: `name: "trachex"`,
+  `bin: { "trachex": "./bin/trachex.mjs" }`, `files: ["bin", "dist", "src"]`.
+- `bin/trachex.mjs` calls `runCli({ argv: process.argv.slice(2) })` and exits
+  with the code.
+- Bundled dashboard: `scripts/build-dashboard.mjs` copies
+  `apps/dashboard/dist` → `packages/trachex/dist/dashboard`. `packages/trachex`
+  depends on `@trachex/dashboard` so turbo orders the dashboard build first
+  (build race otherwise).
+- `resolveBundledDashboardDist()` lives in `packages/shared/src/paths.ts` (not
+  cli/trachex) to avoid a dependency cycle; the CLI `dashboard` case passes it
+  to `startDashboard({ dashboardDist })`.
+- `infra up|down` shells out to `docker compose -f <compose> up -d` / `down`
+  (packages/cli/src/infra.ts `resolveComposeFile`). Qdrant is derived, never
+  canonical (ADR 001).

@@ -2,18 +2,33 @@
 
 ## Goal
 
-Publishable trachex package with executable entry; bundled dashboard assets; platform startup/data-dir checks; trachex infra up/down for Qdrant Compose; optional Studio runner; npm install/provider/project/dashboard/MCP/backup docs. Acceptance: fresh user installs one package and runs CLI; dashboard works without Docker; optional Qdrant explicit and reversible; no provider credentials in archives/package output.
+Make Trachex installable as one `trachex` package with an executable entry point that composes the CLI, API, MCP server, domain, storage, and built dashboard assets. Add platform-specific startup/data-dir checks, `trachex infra up/down` for optional Qdrant Docker Compose, an optional Anvia Studio runner, and user documentation.
+
+Source of truth: `docs/implementation-plan.md` Phase 7, `docs/architecture.md` Distribution + Global Application Layout + Security.
 
 ## Requirements
 
-- TBD
+- Publishable `trachex` package with a `bin` executable entry point.
+- The published package composes CLI, API, MCP, domain, storage, and built dashboard assets (docs/architecture.md Package Boundaries).
+- Bundled dashboard assets included in package output.
+- Platform-specific startup and data-directory checks (app dir resolver already exists in `packages/shared`; ensure the CLI verifies/creates it).
+- `trachex infra up|down` for optional Qdrant Docker Compose (`docker-compose.dev.yml`); explicit and reversible; never silently switches canonical DB.
+- Optional Studio runner for agent development (`@anvia/studio`).
+- Documentation: npm installation, provider setup, project creation, dashboard, MCP, backup.
 
 ## Acceptance Criteria
 
-- [ ] TBD
+- [ ] A fresh user can install one package and run CLI commands.
+- [ ] `trachex dashboard` works without Docker.
+- [ ] Optional Qdrant setup is explicit and reversible (`infra up`/`infra down`).
+- [ ] No provider credentials are included in archives or package output.
+
+## Dependency order
+
+- Depends on Phases 0-6. Phase 8 (eval/hardening) depends on this phase's packaged CLI for the real-ticket acceptance test.
 
 ## Notes
 
-- Keep `prd.md` focused on requirements, constraints, and acceptance criteria.
-- Lightweight tasks can remain PRD-only.
-- For complex tasks, add `design.md` for technical design and `implement.md` for execution planning before `task.py start`.
+- The published package is a thin composition package (`packages/trachex` or a root-level `trachex` package) that re-exports the CLI entry and wires the built dashboard assets path.
+- `infra up/down` shells out to `docker compose -f docker-compose.dev.yml`.
+- Docs live in `docs/` (e.g. `docs/usage.md` or a README section) — no separate site.

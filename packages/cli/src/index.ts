@@ -2,6 +2,7 @@ import { PipelineError } from '@trachex/agent';
 import { startDashboard } from '@trachex/api';
 import { DomainError } from '@trachex/domain';
 import { runMcpServer } from '@trachex/mcp';
+import { resolveBundledDashboardDist } from '@trachex/shared';
 import { openApp } from './app.ts';
 import { parseCommandArgs } from './args.ts';
 import { adjustment } from './commands/adjustment.ts';
@@ -18,6 +19,7 @@ import { proposalApprove, proposalList, proposalReject } from './commands/propos
 import { contextIngest, ticketNew, ticketShow } from './commands/ticket.ts';
 import { resolveProjectSlug } from './context.ts';
 import { CliError, EXIT_DOMAIN, EXIT_ERROR, EXIT_OK, EXIT_USAGE } from './errors.ts';
+import { resolveComposeFile } from './infra.ts';
 import { print, printJson } from './io.ts';
 
 export interface CliEnv {
@@ -297,14 +299,40 @@ export async function runCli(env: CliEnv): Promise<number> {
         });
         void resolveProject(values);
         const port = typeof values.port === 'string' ? Number(values.port) : undefined;
+        const dashboardDist = resolveBundledDashboardDist();
         await startDashboard({
           appDir: ctx.appDir,
           ...(port !== undefined ? { port } : {}),
+          ...(dashboardDist !== undefined ? { dashboardDist } : {}),
         });
         return EXIT_OK;
       }
       case 'infra': {
-        print(`${command} is not implemented yet (planned in a later phase)`);
+        const action = sub;
+        if (action !== 'up' && action !== 'down') {
+          throw new CliError('infra requires up or down', EXIT_USAGE, 'USAGE');
+        }
+        const composeFile = resolveComposeFile();
+        const { spawnSync } = await import('node:child_process');
+        const result = spawnSync(
+          'docker',
+          [
+            'compose',
+            '-f',
+            composeFile,
+            action === 'up' ? 'up' : 'down',
+            ...(action === 'up' ? ['-d'] : []),
+          ],
+          { stdio: 'inherit' },
+        );
+        if (result.status !== 0) {
+          throw new CliError(
+            `docker compose ${action} failed (exit ${result.status})`,
+            EXIT_ERROR,
+            'INFRA',
+          );
+        }
+        print(`infra ${action} complete (Qdrant via ${composeFile})`);
         break;
       }
       case undefined: {

@@ -1,0 +1,35 @@
+{
+  "name": "trachex",
+  "version": "0.1.0",
+  "description": "Local-first development traceability layer: CLI, MCP, and bundled dashboard.",
+  "type": "module",
+  "bin": {
+    "trachex": "./bin/trachex.mjs"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "bin",
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test src/*.test.ts",
+    "build": "node scripts/build-dashboard.mjs"
+  },
+  "dependencies": {
+    "@trachex/api": "workspace:*",
+    "@trachex/cli": "workspace:*",
+    "@trachex/domain": "workspace:*",
+    "@trachex/mcp": "workspace:*",
+    "@trachex/storage-sqlite": "workspace:*",
+    "@trachex/dashboard": "workspace:*",
+    "@trachex/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "^4.23.0",
+    "typescript": "^7.0.2"
+  }
+}

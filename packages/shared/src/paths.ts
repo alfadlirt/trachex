@@ -1,5 +1,7 @@
+import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 export type Platform = 'darwin' | 'linux' | 'win32';
 
@@ -52,4 +54,17 @@ export function exportsDir(appDir: string, projectId: string): string {
 
 export function attachmentsDir(appDir: string, projectId: string): string {
   return join(projectDir(appDir, projectId), 'attachments');
+}
+
+export function resolveBundledDashboardDist(): string | undefined {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const bundled = join(here, '..', '..', '..', 'packages', 'trachex', 'dist', 'dashboard');
+  if (existsSync(join(bundled, 'index.html'))) {
+    return bundled;
+  }
+  const workspace = join(here, '..', '..', '..', 'apps', 'dashboard', 'dist');
+  if (existsSync(join(workspace, 'index.html'))) {
+    return workspace;
+  }
+  return undefined;
 }

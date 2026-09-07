@@ -1,0 +1,3 @@
+{"file": "docs/architecture.md", "reason": "Distribution, package composition, global layout, security"}
+{"file": "docs/implementation-plan.md", "reason": "Phase 7 deliverables and acceptance criteria"}
+{"file": "docs/decisions/001-sqlite-first.md", "reason": "Qdrant optional/derived; dashboard works without Docker"}
