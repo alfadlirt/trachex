@@ -5,3 +5,34 @@
 
 ---
 
+
+
+## Session 1: Trachex MVP: full build across 9 phases
+<!-- trellis-session: v=2 fp=8ebc4d65b4ede616 -->
+
+**Date**: 2026-09-07
+**Task**: Trachex MVP: full build across 9 phases
+**Branch**: `main`
+
+### Summary
+
+Implemented the complete Trachex MVP per docs/ (architecture, implementation-plan, ux, decisions). Created parent task + 8 phase children. Phases 0-8: monorepo bootstrap, SQLite foundation, snapshots/FTS5, Anvia agent + proposal pipeline, CLI, stdio MCP, Hono API + React dashboard, packaging, eval harness. Release gate verified via pnpm eval (8/8 harness + ACCEPTANCE PASS). All 9 tasks archived.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `07c1e50` | feat(phase-0): bootstrap pnpm/turbo/ts/biome monorepo skeleton |
+| `bd30199` | feat(phase-1): global registry + SQLite foundation (schema, repositories, archive) |
+| `ca196f7` | feat(phase-2): source snapshots, chunking, FTS5 retrieval, optional Qdrant rebuild |
+| `0d76447` | feat(phase-3): Anvia agent + proposal pipeline (extraction/reconciliation, memory, observability) |
+| `1c2331a` | feat(phase-4): trachex CLI (project/ticket/adjustment/proposal/check/export, active-project shortcut) |
+| `a9d1a3d` | feat(phase-5): stdio MCP server with scoped read/mutation tools and confirmation |
+| `d65fb0b` | feat(phase-6): Hono API + bundled React dashboard (ticket canvas, proposals, chat) |
+| `94388f9` | feat(phase-7): publishable trachex package, bundled dashboard, infra up/down, usage docs |
+| `e5bfcfc` | feat(phase-8): eval harness, real-ticket acceptance test, security review |
+| `598c1d0` | chore(mvp): final integration review — release gate verified (pnpm eval 8/8 + acceptance) |
+
+### Status
+
+[OK] **Completed**
