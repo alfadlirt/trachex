@@ -108,5 +108,6 @@ export async function ticketShow(ctx: AppContext, args: { key: string; project: 
   }
   const checklist = await ctx.uow.requirements.listActiveByTicket(ticket.id);
   const proposals = await ctx.uow.proposals.listByTicket(ticket.id);
-  printJson({ ticket, checklist, proposals });
+  const sources = await ctx.uow.sources.listByTicket(ticket.id);
+  printJson({ ticket, checklist, proposals, sources });
 }

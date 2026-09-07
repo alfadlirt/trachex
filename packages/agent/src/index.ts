@@ -1,3 +1,5 @@
+export * from './evals/cli.ts';
+export * from './evals/harness.ts';
 export * from './factory.ts';
 export * from './memory.ts';
 export * from './observability.ts';

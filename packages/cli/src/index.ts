@@ -60,7 +60,7 @@ export async function runCli(env: CliEnv): Promise<number> {
       print('proposal reject <id> --project <slug>');
       print('check <key> <requirement-id> --project <slug> [--yes]');
       print('export <key> --project <slug> --format markdown|json [--out <file>]');
-      print('dashboard | mcp | infra');
+      print('dashboard | mcp | infra | eval');
       return EXIT_OK;
     }
 
@@ -334,6 +334,18 @@ export async function runCli(env: CliEnv): Promise<number> {
         }
         print(`infra ${action} complete (Qdrant via ${composeFile})`);
         break;
+      }
+      case 'eval': {
+        const { runEvalCli } = await import('@trachex/agent');
+        const { runAcceptanceTest } = await import('./evals/acceptance.ts');
+        const evalCode = await runEvalCli();
+        print('');
+        const acceptance = await runAcceptanceTest();
+        print(`ACCEPTANCE ${acceptance.passed ? 'PASS' : 'FAIL'}`);
+        for (const line of acceptance.detail) {
+          print(`  - ${line}`);
+        }
+        return evalCode === 0 && acceptance.passed ? EXIT_OK : EXIT_ERROR;
       }
       case undefined: {
         print('trachex — local-first development traceability');

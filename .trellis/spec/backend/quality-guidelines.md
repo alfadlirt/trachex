@@ -50,6 +50,13 @@ Biome 2 at repo root, `tsx` for running TS in tests/dev. Node engine floor is
   completion, project scoping, export determinism (Phase 1+).
 - SQLite integration tests: migrations, concurrent access, FTS5, archive round
   trips (Phase 1+).
+- Eval harness (`packages/agent/src/evals/`): fixture-based (no real LLM),
+  deterministic in CI. `pnpm eval` runs the harness + the real-ticket
+  acceptance test (`packages/cli/src/evals/acceptance.ts`) and exits non-zero
+  on failure. Release gate: one real ticket completes the full flow; all
+  adjustments have source + timestamps; direct conflicts require approval;
+  human completion is never inferred; export includes timeline, checklist,
+  impacts, scenarios, history.
 
 ---
 
