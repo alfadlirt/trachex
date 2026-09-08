@@ -24,7 +24,8 @@
     "format": "biome format --write .",
     "test": "turbo run test",
     "dev": "turbo run dev",
-    "eval": "node packages/trachex/bin/trachex.mjs eval"
+    "eval": "node packages/trachex/bin/trachex.mjs eval",
+    "trachex": "node packages/trachex/bin/trachex.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.0",
