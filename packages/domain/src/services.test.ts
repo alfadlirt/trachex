@@ -22,7 +22,9 @@ import type {
 } from './entities.ts';
 import {
   approveProposal,
+  buildChecklistView,
   buildExportSummary,
+  buildProjectStatus,
   type ChunkRepository,
   type CompletionAuditRepository,
   ConflictError,
@@ -164,6 +166,10 @@ class MemoryUnitOfWork implements UnitOfWork {
     listActiveByTicket: async (ticketId) =>
       this.data.requirements.filter(
         (r) => r.ticketId === ticketId && r.lifecycleStatus === 'active',
+      ),
+    listSupersededByTicket: async (ticketId) =>
+      this.data.requirements.filter(
+        (r) => r.ticketId === ticketId && r.lifecycleStatus === 'superseded',
       ),
     update: async (requirement) => {
       const i = this.data.requirements.findIndex((r) => r.id === requirement.id);
@@ -498,4 +504,76 @@ test('export summary includes checklist, impacts, scenarios, history, timeline',
   assert.ok(kinds.includes('proposal'));
   assert.ok(kinds.includes('approval'));
   assert.ok(kinds.includes('completion'));
+});
+
+test('buildProjectStatus rolls up per-ticket and project totals', async () => {
+  const uow = new MemoryUnitOfWork();
+  const { project, ticket } = await seedProjectTicket(uow);
+  const proposal = await createProposal(uow, {
+    ticketId: ticket.id,
+    kind: 'extraction',
+    output: { kind: 'extraction', requirements: [{ title: 'R1' }, { title: 'R2' }] },
+  });
+  await approveProposal(uow, { proposalId: proposal.id });
+  const reqs = await uow.requirements.listByTicket(ticket.id);
+  const firstReq = reqs[0];
+  assert.ok(firstReq, 'a requirement exists');
+  await checkRequirement(uow, { requirementId: firstReq.id, actorType: 'human' });
+
+  const status = await buildProjectStatus(uow, project.id);
+  assert.equal(status.totals.tickets, 1);
+  assert.equal(status.totals.active, 2);
+  assert.equal(status.totals.checked, 1);
+  assert.equal(status.totals.remaining, 1);
+  assert.equal(status.tickets[0]?.checked, 1);
+  assert.equal(status.tickets[0]?.remaining, 1);
+  assert.ok(status.updatedAt.length > 0);
+});
+
+test('buildChecklistView groups active items and lists superseded struck-through candidates', async () => {
+  const uow = new MemoryUnitOfWork();
+  const { project, ticket } = await seedProjectTicket(uow);
+  const p1 = await createProposal(uow, {
+    ticketId: ticket.id,
+    kind: 'extraction',
+    output: {
+      kind: 'extraction',
+      requirements: [
+        {
+          title: 'Discount cap 20%',
+          parentLabel: 'Discounting',
+          impacts: [{ kind: 'service', value: 'config-service' }],
+          scenarios: ['Non-VIP at cap'],
+        },
+      ],
+    },
+  });
+  await approveProposal(uow, { proposalId: p1.id });
+  const oldReq = (await uow.requirements.listByTicket(ticket.id))[0];
+  assert.ok(oldReq, 'original requirement exists');
+  const p2 = await createProposal(uow, {
+    ticketId: ticket.id,
+    kind: 'reconciliation',
+    output: {
+      kind: 'reconciliation',
+      create: [
+        {
+          title: 'Discount cap 15%, VIP exempt',
+          parentLabel: 'Discounting',
+          supersedes: [oldReq.id],
+        },
+      ],
+    },
+  });
+  await approveProposal(uow, { proposalId: p2.id });
+
+  const view = await buildChecklistView(uow, { projectId: project.id, ticketKey: ticket.key });
+  assert.equal(view.groups.length, 1);
+  assert.equal(view.groups[0]?.label, 'Discounting');
+  assert.equal(view.groups[0]?.items.length, 1);
+  assert.equal(view.groups[0]?.items[0]?.title, 'Discount cap 15%, VIP exempt');
+  assert.equal(view.groups[0]?.items[0]?.impacts.length, 0);
+  assert.equal(view.superseded.length, 1);
+  assert.equal(view.superseded[0]?.item.title, 'Discount cap 20%');
+  assert.equal(view.superseded[0]?.supersededByTitle, 'Discount cap 15%, VIP exempt');
 });

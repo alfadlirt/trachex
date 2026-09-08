@@ -137,6 +137,7 @@ class MemoryIngestUow implements UnitOfWork {
     findById: async () => null,
     listByTicket: async () => [],
     listActiveByTicket: async () => [],
+    listSupersededByTicket: async () => [],
     update: async (requirement) => requirement,
     addRelationship: async (relationship) => relationship,
     listRelationshipsByTicket: async () => [],

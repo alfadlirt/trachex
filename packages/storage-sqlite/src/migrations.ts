@@ -4,7 +4,7 @@ export interface Migration {
   sql: string;
 }
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export const migrations: Migration[] = [
   {
@@ -226,6 +226,23 @@ END;
 CREATE TRIGGER chunks_fts_ad AFTER DELETE ON chunks BEGIN
   DELETE FROM chunks_fts WHERE chunk_id = OLD.id;
 END;
+`,
+  },
+  {
+    version: 2,
+    name: 'checklist-display-order',
+    sql: `
+ALTER TABLE requirements ADD COLUMN display_order INTEGER NOT NULL DEFAULT 0;
+
+UPDATE requirements
+SET display_order = (
+  SELECT COUNT(*) FROM requirements r2
+  WHERE r2.ticket_id = requirements.ticket_id
+    AND (r2.created_at < requirements.created_at
+         OR (r2.created_at = requirements.created_at AND r2.id < requirements.id))
+);
+
+CREATE INDEX idx_requirements_order ON requirements(ticket_id, display_order, created_at);
 `,
   },
 ];

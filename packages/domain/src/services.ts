@@ -359,6 +359,7 @@ async function createRequirementFromDraft(
     lifecycleStatus: 'active',
     devStatus: 'unchecked',
     parentLabel: draft.parentLabel?.trim() || null,
+    displayOrder: await nextDisplayOrder(uow, ticketId),
     createdAt: now,
     updatedAt: now,
   };
@@ -489,4 +490,15 @@ export async function buildExportSummary(
     scenarios,
     history,
   };
+}
+
+export async function nextDisplayOrder(uow: UnitOfWork, ticketId: string): Promise<number> {
+  const requirements = await uow.requirements.listByTicket(ticketId);
+  let max = -1;
+  for (const requirement of requirements) {
+    if (requirement.displayOrder > max) {
+      max = requirement.displayOrder;
+    }
+  }
+  return max + 1;
 }

@@ -7,6 +7,7 @@ import { openApp } from './app.ts';
 import { parseCommandArgs } from './args.ts';
 import { adjustment } from './commands/adjustment.ts';
 import { check } from './commands/check.ts';
+import { checklistList } from './commands/checklist.ts';
 import { exportSummary } from './commands/export.ts';
 import {
   projectCreate,
@@ -16,6 +17,7 @@ import {
   repoAdd,
 } from './commands/project.ts';
 import { proposalApprove, proposalList, proposalReject } from './commands/proposal.ts';
+import { statusProject } from './commands/status.ts';
 import { contextIngest, ticketNew, ticketShow } from './commands/ticket.ts';
 import { resolveProjectSlug } from './context.ts';
 import { CliError, EXIT_DOMAIN, EXIT_ERROR, EXIT_OK, EXIT_USAGE } from './errors.ts';
@@ -60,6 +62,8 @@ export async function runCli(env: CliEnv): Promise<number> {
       print('proposal reject <id> --project <slug>');
       print('check <key> <requirement-id> --project <slug> [--yes]');
       print('export <key> --project <slug> --format markdown|json [--out <file>]');
+      print('status [--project <slug>] [--json]');
+      print('checklist list <ticketKey> --project <slug> [--json]');
       print('dashboard | mcp | infra | eval');
       return EXIT_OK;
     }
@@ -282,6 +286,36 @@ export async function runCli(env: CliEnv): Promise<number> {
           format,
           ...(typeof values.out === 'string' ? { out: values.out } : {}),
         });
+        break;
+      }
+      case 'status': {
+        const { values } = parseCommandArgs([sub, ...rest].filter(Boolean) as string[], {
+          project: { type: 'string' },
+          json: { type: 'boolean' },
+        });
+        const project = resolveProject(values);
+        await statusProject(ctx, { project, json: values.json === true });
+        break;
+      }
+      case 'checklist': {
+        if (sub === 'list') {
+          const { positionals, values } = parseCommandArgs(rest, {
+            project: { type: 'string' },
+            json: { type: 'boolean' },
+          });
+          const key = positionals[0];
+          const project = resolveProject(values);
+          if (!key || !project) {
+            throw new CliError(
+              'checklist list requires <ticketKey> --project <slug>',
+              EXIT_USAGE,
+              'USAGE',
+            );
+          }
+          await checklistList(ctx, { key, project, json: values.json === true });
+        } else {
+          throw new CliError(`unknown checklist subcommand: ${sub}`, EXIT_USAGE, 'USAGE');
+        }
         break;
       }
       case 'mcp': {

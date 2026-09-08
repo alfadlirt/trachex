@@ -67,6 +67,7 @@ export interface RequirementRepository {
   findById(id: string): Promise<Requirement | null>;
   listByTicket(ticketId: string): Promise<Requirement[]>;
   listActiveByTicket(ticketId: string): Promise<Requirement[]>;
+  listSupersededByTicket(ticketId: string): Promise<Requirement[]>;
   update(requirement: Requirement): Promise<Requirement>;
   addRelationship(relationship: RequirementRelationship): Promise<RequirementRelationship>;
   listRelationshipsByTicket(ticketId: string): Promise<RequirementRelationship[]>;

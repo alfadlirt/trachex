@@ -130,6 +130,7 @@ function requirementFromRow(row: Row): Requirement {
     lifecycleStatus: String(row.lifecycle_status) as Requirement['lifecycleStatus'],
     devStatus: String(row.dev_status) as Requirement['devStatus'],
     parentLabel: row.parent_label == null ? null : String(row.parent_label),
+    displayOrder: Number(row.display_order ?? 0),
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
   };
@@ -519,8 +520,8 @@ export class SqliteRequirementRepository implements RequirementRepository {
     this.db
       .prepare(
         `INSERT INTO requirements (id, project_id, ticket_id, title, description, source_id, source_location,
-           lifecycle_status, dev_status, parent_label, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           lifecycle_status, dev_status, parent_label, display_order, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         requirement.id,
@@ -533,6 +534,7 @@ export class SqliteRequirementRepository implements RequirementRepository {
         requirement.lifecycleStatus,
         requirement.devStatus,
         requirement.parentLabel,
+        requirement.displayOrder,
         requirement.createdAt,
         requirement.updatedAt,
       );
@@ -548,7 +550,7 @@ export class SqliteRequirementRepository implements RequirementRepository {
 
   async listByTicket(ticketId: string): Promise<Requirement[]> {
     const rows = this.db
-      .prepare('SELECT * FROM requirements WHERE ticket_id = ? ORDER BY created_at')
+      .prepare('SELECT * FROM requirements WHERE ticket_id = ? ORDER BY display_order, created_at')
       .all(ticketId) as Row[];
     return rows.map(requirementFromRow);
   }
@@ -556,7 +558,16 @@ export class SqliteRequirementRepository implements RequirementRepository {
   async listActiveByTicket(ticketId: string): Promise<Requirement[]> {
     const rows = this.db
       .prepare(
-        "SELECT * FROM requirements WHERE ticket_id = ? AND lifecycle_status = 'active' ORDER BY created_at",
+        "SELECT * FROM requirements WHERE ticket_id = ? AND lifecycle_status = 'active' ORDER BY display_order, created_at",
+      )
+      .all(ticketId) as Row[];
+    return rows.map(requirementFromRow);
+  }
+
+  async listSupersededByTicket(ticketId: string): Promise<Requirement[]> {
+    const rows = this.db
+      .prepare(
+        "SELECT * FROM requirements WHERE ticket_id = ? AND lifecycle_status = 'superseded' ORDER BY display_order, created_at",
       )
       .all(ticketId) as Row[];
     return rows.map(requirementFromRow);
@@ -566,7 +577,7 @@ export class SqliteRequirementRepository implements RequirementRepository {
     this.db
       .prepare(
         `UPDATE requirements SET title = ?, description = ?, source_id = ?, source_location = ?,
-           lifecycle_status = ?, dev_status = ?, parent_label = ?, updated_at = ?
+           lifecycle_status = ?, dev_status = ?, parent_label = ?, display_order = ?, updated_at = ?
          WHERE id = ?`,
       )
       .run(
@@ -577,6 +588,7 @@ export class SqliteRequirementRepository implements RequirementRepository {
         requirement.lifecycleStatus,
         requirement.devStatus,
         requirement.parentLabel,
+        requirement.displayOrder,
         requirement.updatedAt,
         requirement.id,
       );

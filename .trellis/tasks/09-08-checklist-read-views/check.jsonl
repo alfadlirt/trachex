@@ -1,0 +1,3 @@
+{"file": "docs/architecture.md", "reason": "CLI contract, domain model, completion audit semantics"}
+{"file": "docs/decisions/002-global-project-registry.md", "reason": "Project scope via --project/active shortcut"}
+{"file": "docs/decisions/003-proposals-before-apply.md", "reason": "Read views expose pending work; edits are separate (child 2)"}

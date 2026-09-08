@@ -98,6 +98,7 @@ export interface Requirement {
   lifecycleStatus: RequirementLifecycleStatus;
   devStatus: RequirementDevStatus;
   parentLabel: string | null;
+  displayOrder: number;
   createdAt: IsoDateTime;
   updatedAt: IsoDateTime;
 }

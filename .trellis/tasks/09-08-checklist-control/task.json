@@ -1,0 +1,29 @@
+{
+  "id": "checklist-control",
+  "name": "checklist-control",
+  "title": "Human checklist control: status, checklist view, direct edits",
+  "description": "Parent. Make the checklist the human control surface. Add trachex status (project rollup), trachex checklist list <ticketKey> (grouped tree with superseded strikethrough + checked distinct), and direct human edit commands (add / edit / supersede / reorder / check-uncheck) with automatic provenance. Human edits are direct but every content change records a manual source + actor/note and marks superseded items; ordering is explicit.",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P1",
+  "creator": "alfa",
+  "assignee": "alfa",
+  "createdAt": "2026-09-08",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "09-08-checklist-read-views",
+    "09-08-checklist-edit-commands"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

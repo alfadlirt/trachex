@@ -48,6 +48,10 @@ Connection manager (`src/connection.ts`):
 - Uniqueness: `projects.slug` globally unique; `tickets.key` unique per
   `(project_id, key)`; `repositories.slug` unique per `(project_id, slug)`;
   `proposal_versions(proposal_id, version)`.
+- Ordering: `requirements.display_order` (migration v2) is the explicit checklist
+  order, backfilled by `(created_at, id)`; reads order by
+  `display_order, created_at`. New requirements append via
+  `nextDisplayOrder` (max + 1). `SCHEMA_VERSION` is bumped with each migration.
 
 ## Common Mistakes
 

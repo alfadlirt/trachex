@@ -125,6 +125,7 @@ class MemoryUow implements UnitOfWork {
     findById: async (id) => this.data.requirements.find((r) => r.id === id) ?? null,
     listByTicket: async () => [],
     listActiveByTicket: async () => [],
+    listSupersededByTicket: async () => [],
     update: async (r) => r,
     addRelationship: async (rel) => rel,
     listRelationshipsByTicket: async () => [],

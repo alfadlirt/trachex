@@ -69,9 +69,9 @@ test('migrations apply idempotently and set pragmas', () => {
   const dir = tempDir();
   try {
     const db = openDb(dir);
-    assert.equal(currentSchemaVersion(db), 1);
+    assert.equal(currentSchemaVersion(db), 2);
     migrate(db);
-    assert.equal(currentSchemaVersion(db), 1);
+    assert.equal(currentSchemaVersion(db), 2);
     const journal = db.pragma('journal_mode', { simple: true }) as unknown as string;
     assert.equal(journal, 'wal');
     const fk = db.pragma('foreign_keys', { simple: true }) as unknown as number;
@@ -223,6 +223,59 @@ test('FTS5 search returns provenance', async () => {
     assert.equal(results[0]?.relPath, 'docs/fsd.md');
     assert.equal(results[0]?.location, 'docs/fsd.md:12');
     assert.ok(results[0]?.content.includes('15 percent'));
+    db.close();
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('requirements keep explicit display_order and superseded items are listable', async () => {
+  const dir = tempDir();
+  try {
+    const db = openDb(dir);
+    const uow = new SqliteUnitOfWork(db);
+    const project = await createProject(uow, { slug: 'order', name: 'Order' });
+    const ticket = await createTicket(uow, { projectId: project.id, key: 'K', title: 't' });
+    const p1 = await createProposal(uow, {
+      ticketId: ticket.id,
+      kind: 'extraction',
+      output: {
+        kind: 'extraction',
+        requirements: [{ title: 'First' }, { title: 'Second' }, { title: 'Third' }],
+      },
+    });
+    await approveProposal(uow, { proposalId: p1.id });
+
+    const active = await uow.requirements.listActiveByTicket(ticket.id);
+    assert.deepEqual(
+      active.map((r) => r.title),
+      ['First', 'Second', 'Third'],
+    );
+    assert.deepEqual(
+      active.map((r) => r.displayOrder),
+      [0, 1, 2],
+    );
+
+    const old = active[0];
+    assert.ok(old, 'first requirement exists');
+    const p2 = await createProposal(uow, {
+      ticketId: ticket.id,
+      kind: 'reconciliation',
+      output: {
+        kind: 'reconciliation',
+        create: [{ title: 'First (revised)', supersedes: [old.id] }],
+      },
+    });
+    await approveProposal(uow, { proposalId: p2.id });
+
+    const activeAfter = await uow.requirements.listActiveByTicket(ticket.id);
+    assert.deepEqual(
+      activeAfter.map((r) => r.title).sort(),
+      ['First (revised)', 'Second', 'Third'].sort(),
+    );
+    const superseded = await uow.requirements.listSupersededByTicket(ticket.id);
+    assert.equal(superseded.length, 1);
+    assert.equal(superseded[0]?.title, 'First');
     db.close();
   } finally {
     rmSync(dir, { recursive: true, force: true });
