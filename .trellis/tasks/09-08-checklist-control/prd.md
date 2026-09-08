@@ -41,7 +41,7 @@ Dependency ordering (written in child artifacts, not implied by tree position): 
 
 ## Cross-child acceptance criteria
 
-- A developer can, entirely via the CLI: create a project/ticket, add manual items, see an accurate `status` rollup and grouped `checklist list`, edit an item (old superseded + struck-through in the view, new item in place), reorder, uncheck, and confirm every change is traceable (manual source + actor + timestamps).
+- [x] A developer can, entirely via the CLI: create a project/ticket, add manual items, see an accurate `status` rollup and grouped `checklist list`, edit an item (old superseded + struck-through in the view, new item in place), reorder, uncheck, and confirm every change is traceable (manual source + actor + timestamps). (Verified end-to-end via the packaged CLI.)
 - Superseded items remain queryable in history and never disappear from provenance.
 - `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm eval` stay green.
 
