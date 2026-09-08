@@ -162,15 +162,18 @@ class MemoryUnitOfWork implements UnitOfWork {
       return requirement;
     },
     findById: async (id) => this.data.requirements.find((r) => r.id === id) ?? null,
-    listByTicket: async (ticketId) => this.data.requirements.filter((r) => r.ticketId === ticketId),
+    listByTicket: async (ticketId) =>
+      this.data.requirements
+        .filter((r) => r.ticketId === ticketId)
+        .sort((a, b) => a.displayOrder - b.displayOrder || a.createdAt.localeCompare(b.createdAt)),
     listActiveByTicket: async (ticketId) =>
-      this.data.requirements.filter(
-        (r) => r.ticketId === ticketId && r.lifecycleStatus === 'active',
-      ),
+      this.data.requirements
+        .filter((r) => r.ticketId === ticketId && r.lifecycleStatus === 'active')
+        .sort((a, b) => a.displayOrder - b.displayOrder || a.createdAt.localeCompare(b.createdAt)),
     listSupersededByTicket: async (ticketId) =>
-      this.data.requirements.filter(
-        (r) => r.ticketId === ticketId && r.lifecycleStatus === 'superseded',
-      ),
+      this.data.requirements
+        .filter((r) => r.ticketId === ticketId && r.lifecycleStatus === 'superseded')
+        .sort((a, b) => a.displayOrder - b.displayOrder || a.createdAt.localeCompare(b.createdAt)),
     update: async (requirement) => {
       const i = this.data.requirements.findIndex((r) => r.id === requirement.id);
       if (i >= 0) this.data.requirements[i] = requirement;
@@ -576,4 +579,131 @@ test('buildChecklistView groups active items and lists superseded struck-through
   assert.equal(view.superseded.length, 1);
   assert.equal(view.superseded[0]?.item.title, 'Discount cap 20%');
   assert.equal(view.superseded[0]?.supersededByTitle, 'Discount cap 15%, VIP exempt');
+});
+
+test('addRequirementManual creates a manual source and appends at the end', async () => {
+  const uow = new MemoryUnitOfWork();
+  const { project, ticket } = await seedProjectTicket(uow);
+  const { addRequirementManual } = await import('./edits.ts');
+  const r1 = await addRequirementManual(uow, {
+    ticketId: ticket.id,
+    title: 'Manual item',
+    parentLabel: 'Ops',
+    actorType: 'human',
+    actorId: 'budi',
+  });
+  const r2 = await addRequirementManual(uow, {
+    ticketId: ticket.id,
+    title: 'Second',
+    actorType: 'human',
+    actorId: 'budi',
+  });
+  assert.equal(r1.displayOrder, 0);
+  assert.equal(r2.displayOrder, 1);
+  const sources = await uow.sources.listByTicket(ticket.id);
+  const manual = sources.find((s) => s.id === r1.sourceId);
+  assert.equal(manual?.type, 'manual');
+  assert.equal(manual?.attribution, 'budi');
+  assert.equal(r1.projectId, project.id);
+});
+
+test('editRequirementContent supersedes old and places new at same position', async () => {
+  const uow = new MemoryUnitOfWork();
+  const { ticket } = await seedProjectTicket(uow);
+  const { addRequirementManual, editRequirementContent } = await import('./edits.ts');
+  const a = await addRequirementManual(uow, {
+    ticketId: ticket.id,
+    title: 'A',
+    actorType: 'human',
+  });
+  await addRequirementManual(uow, { ticketId: ticket.id, title: 'B', actorType: 'human' });
+
+  const edited = await editRequirementContent(uow, {
+    ticketId: ticket.id,
+    requirementId: a.id,
+    title: 'A revised',
+    actorType: 'human',
+    actorId: 'budi',
+  });
+  assert.equal(edited.displayOrder, a.displayOrder);
+  const active = await uow.requirements.listActiveByTicket(ticket.id);
+  assert.deepEqual(
+    active.map((r) => r.title),
+    ['A revised', 'B'],
+  );
+  const old = await uow.requirements.findById(a.id);
+  assert.equal(old?.lifecycleStatus, 'superseded');
+  const rels = await uow.requirements.listRelationshipsByTicket(ticket.id);
+  assert.equal(rels.length, 1);
+  assert.equal(rels[0]?.fromRequirementId, edited.id);
+  assert.equal(rels[0]?.toRequirementId, a.id);
+});
+
+test('supersedeRequirement marks active item superseded without replacement', async () => {
+  const uow = new MemoryUnitOfWork();
+  const { ticket } = await seedProjectTicket(uow);
+  const { addRequirementManual, supersedeRequirement } = await import('./edits.ts');
+  const a = await addRequirementManual(uow, {
+    ticketId: ticket.id,
+    title: 'A',
+    actorType: 'human',
+  });
+  await supersedeRequirement(uow, { ticketId: ticket.id, requirementId: a.id, actorType: 'human' });
+  const active = await uow.requirements.listActiveByTicket(ticket.id);
+  assert.equal(active.length, 0);
+  const superseded = await uow.requirements.listSupersededByTicket(ticket.id);
+  assert.equal(superseded.length, 1);
+});
+
+test('reorderChecklist rewrites display_order and validates the id set', async () => {
+  const uow = new MemoryUnitOfWork();
+  const { ticket } = await seedProjectTicket(uow);
+  const { addRequirementManual, reorderChecklist } = await import('./edits.ts');
+  const a = await addRequirementManual(uow, {
+    ticketId: ticket.id,
+    title: 'A',
+    actorType: 'human',
+  });
+  const b = await addRequirementManual(uow, {
+    ticketId: ticket.id,
+    title: 'B',
+    actorType: 'human',
+  });
+  const c = await addRequirementManual(uow, {
+    ticketId: ticket.id,
+    title: 'C',
+    actorType: 'human',
+  });
+  await reorderChecklist(uow, { ticketId: ticket.id, orderedIds: [c.id, a.id, b.id] });
+  const active = await uow.requirements.listActiveByTicket(ticket.id);
+  assert.deepEqual(
+    active.map((r) => r.title),
+    ['C', 'A', 'B'],
+  );
+  await assert.rejects(
+    () => reorderChecklist(uow, { ticketId: ticket.id, orderedIds: [a.id] }),
+    (e: unknown) => e instanceof InvalidOperationError,
+  );
+});
+
+test('uncheckRequirement flips dev status and records an uncheck audit', async () => {
+  const uow = new MemoryUnitOfWork();
+  const { ticket } = await seedProjectTicket(uow);
+  const { addRequirementManual, uncheckRequirement } = await import('./edits.ts');
+  const a = await addRequirementManual(uow, {
+    ticketId: ticket.id,
+    title: 'A',
+    actorType: 'human',
+  });
+  await checkRequirement(uow, { requirementId: a.id, actorType: 'human' });
+  const audit = await uncheckRequirement(uow, {
+    requirementId: a.id,
+    actorType: 'human',
+    actorId: 'budi',
+  });
+  assert.equal(audit.action, 'uncheck');
+  const updated = await uow.requirements.findById(a.id);
+  assert.equal(updated?.devStatus, 'unchecked');
+  const audits = await uow.completionAudits.listByRequirement(a.id);
+  assert.deepEqual(audits.map((x) => x.action).sort(), ['check', 'uncheck']);
 });

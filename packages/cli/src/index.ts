@@ -7,7 +7,13 @@ import { openApp } from './app.ts';
 import { parseCommandArgs } from './args.ts';
 import { adjustment } from './commands/adjustment.ts';
 import { check } from './commands/check.ts';
-import { checklistList } from './commands/checklist.ts';
+import {
+  checklistAdd,
+  checklistEdit,
+  checklistList,
+  checklistReorder,
+  checklistSupersede,
+} from './commands/checklist.ts';
 import { exportSummary } from './commands/export.ts';
 import {
   projectCreate,
@@ -19,6 +25,7 @@ import {
 import { proposalApprove, proposalList, proposalReject } from './commands/proposal.ts';
 import { statusProject } from './commands/status.ts';
 import { contextIngest, ticketNew, ticketShow } from './commands/ticket.ts';
+import { uncheck } from './commands/uncheck.ts';
 import { resolveProjectSlug } from './context.ts';
 import { CliError, EXIT_DOMAIN, EXIT_ERROR, EXIT_OK, EXIT_USAGE } from './errors.ts';
 import { resolveComposeFile } from './infra.ts';
@@ -64,6 +71,11 @@ export async function runCli(env: CliEnv): Promise<number> {
       print('export <key> --project <slug> --format markdown|json [--out <file>]');
       print('status [--project <slug>] [--json]');
       print('checklist list <ticketKey> --project <slug> [--json]');
+      print('checklist add <ticketKey> --project <slug> --title <t> [--from <actor>]');
+      print('checklist edit <ticketKey> <requirement-id> --project <slug> --title <t>');
+      print('checklist supersede <ticketKey> <requirement-id> --project <slug>');
+      print('checklist reorder <ticketKey> --project <slug> --order <id1,id2,...>');
+      print('uncheck <ticketKey> <requirement-id> --project <slug>');
       print('dashboard | mcp | infra | eval');
       return EXIT_OK;
     }
@@ -313,9 +325,143 @@ export async function runCli(env: CliEnv): Promise<number> {
             );
           }
           await checklistList(ctx, { key, project, json: values.json === true });
+        } else if (sub === 'add') {
+          const { positionals, values } = parseCommandArgs(rest, {
+            project: { type: 'string' },
+            title: { type: 'string' },
+            description: { type: 'string' },
+            parent: { type: 'string' },
+            from: { type: 'string' },
+            note: { type: 'string' },
+            json: { type: 'boolean' },
+          });
+          const key = positionals[0];
+          const project = resolveProject(values);
+          const title = typeof values.title === 'string' ? values.title : undefined;
+          if (!key || !project || !title) {
+            throw new CliError(
+              'checklist add requires <ticketKey> --project <slug> --title <t>',
+              EXIT_USAGE,
+              'USAGE',
+            );
+          }
+          await checklistAdd(ctx, {
+            key,
+            project,
+            title,
+            ...(typeof values.description === 'string' ? { description: values.description } : {}),
+            ...(typeof values.parent === 'string' ? { parent: values.parent } : {}),
+            ...(typeof values.from === 'string' ? { from: values.from } : {}),
+            ...(typeof values.note === 'string' ? { note: values.note } : {}),
+            json: values.json === true,
+          });
+        } else if (sub === 'edit') {
+          const { positionals, values } = parseCommandArgs(rest, {
+            project: { type: 'string' },
+            title: { type: 'string' },
+            description: { type: 'string' },
+            parent: { type: 'string' },
+            from: { type: 'string' },
+            note: { type: 'string' },
+            json: { type: 'boolean' },
+          });
+          const key = positionals[0];
+          const requirementId = positionals[1];
+          const project = resolveProject(values);
+          if (!key || !requirementId || !project) {
+            throw new CliError(
+              'checklist edit requires <ticketKey> <requirement-id> --project <slug>',
+              EXIT_USAGE,
+              'USAGE',
+            );
+          }
+          await checklistEdit(ctx, {
+            key,
+            project,
+            requirementId,
+            ...(typeof values.title === 'string' ? { title: values.title } : {}),
+            ...(typeof values.description === 'string' ? { description: values.description } : {}),
+            ...(typeof values.parent === 'string' ? { parent: values.parent } : {}),
+            ...(typeof values.from === 'string' ? { from: values.from } : {}),
+            ...(typeof values.note === 'string' ? { note: values.note } : {}),
+            json: values.json === true,
+          });
+        } else if (sub === 'supersede') {
+          const { positionals, values } = parseCommandArgs(rest, {
+            project: { type: 'string' },
+            from: { type: 'string' },
+            note: { type: 'string' },
+            json: { type: 'boolean' },
+          });
+          const key = positionals[0];
+          const requirementId = positionals[1];
+          const project = resolveProject(values);
+          if (!key || !requirementId || !project) {
+            throw new CliError(
+              'checklist supersede requires <ticketKey> <requirement-id> --project <slug>',
+              EXIT_USAGE,
+              'USAGE',
+            );
+          }
+          await checklistSupersede(ctx, {
+            key,
+            project,
+            requirementId,
+            ...(typeof values.from === 'string' ? { from: values.from } : {}),
+            ...(typeof values.note === 'string' ? { note: values.note } : {}),
+            json: values.json === true,
+          });
+        } else if (sub === 'reorder') {
+          const { positionals, values } = parseCommandArgs(rest, {
+            project: { type: 'string' },
+            order: { type: 'string' },
+            json: { type: 'boolean' },
+          });
+          const key = positionals[0];
+          const project = resolveProject(values);
+          const orderRaw = typeof values.order === 'string' ? values.order : '';
+          const order = orderRaw.split(',').filter((id) => id.length > 0);
+          if (!key || !project || order.length === 0) {
+            throw new CliError(
+              'checklist reorder requires <ticketKey> --project <slug> --order <id1,id2,...>',
+              EXIT_USAGE,
+              'USAGE',
+            );
+          }
+          await checklistReorder(ctx, { key, project, order, json: values.json === true });
         } else {
           throw new CliError(`unknown checklist subcommand: ${sub}`, EXIT_USAGE, 'USAGE');
         }
+        break;
+      }
+      case 'uncheck': {
+        const { positionals, values } = parseCommandArgs(
+          [sub, ...rest].filter(Boolean) as string[],
+          {
+            project: { type: 'string' },
+            from: { type: 'string' },
+            note: { type: 'string' },
+            json: { type: 'boolean' },
+          },
+        );
+        const key = positionals[0];
+        const requirementId = positionals[1];
+        const project = resolveProject(values);
+        if (!key || !requirementId || !project) {
+          throw new CliError(
+            'uncheck requires <ticketKey> <requirement-id> --project <slug>',
+            EXIT_USAGE,
+            'USAGE',
+          );
+        }
+        await uncheck(ctx, {
+          key,
+          requirementId,
+          project,
+          ...(typeof values.from === 'string' ? { from: values.from } : {}),
+          ...(typeof values.note === 'string' ? { note: values.note } : {}),
+          json: values.json === true,
+        });
         break;
       }
       case 'mcp': {

@@ -69,9 +69,9 @@ test('migrations apply idempotently and set pragmas', () => {
   const dir = tempDir();
   try {
     const db = openDb(dir);
-    assert.equal(currentSchemaVersion(db), 2);
+    assert.equal(currentSchemaVersion(db), 4);
     migrate(db);
-    assert.equal(currentSchemaVersion(db), 2);
+    assert.equal(currentSchemaVersion(db), 4);
     const journal = db.pragma('journal_mode', { simple: true }) as unknown as string;
     assert.equal(journal, 'wal');
     const fk = db.pragma('foreign_keys', { simple: true }) as unknown as number;
@@ -276,6 +276,34 @@ test('requirements keep explicit display_order and superseded items are listable
     const superseded = await uow.requirements.listSupersededByTicket(ticket.id);
     assert.equal(superseded.length, 1);
     assert.equal(superseded[0]?.title, 'First');
+    db.close();
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('completion audit action is persisted (check/uncheck)', async () => {
+  const dir = tempDir();
+  try {
+    const db = openDb(dir);
+    const uow = new SqliteUnitOfWork(db);
+    const project = await createProject(uow, { slug: 'audit', name: 'Audit' });
+    const ticket = await createTicket(uow, { projectId: project.id, key: 'K', title: 't' });
+    const { addRequirementManual, uncheckRequirement } = await import('@trachex/domain');
+    const req = await addRequirementManual(uow, {
+      ticketId: ticket.id,
+      title: 'A',
+      actorType: 'human',
+      actorId: 'budi',
+    });
+    const { checkRequirement } = await import('@trachex/domain');
+    await checkRequirement(uow, { requirementId: req.id, actorType: 'human' });
+    await uncheckRequirement(uow, { requirementId: req.id, actorType: 'human' });
+
+    const audits = await uow.completionAudits.listByRequirement(req.id);
+    assert.deepEqual(audits.map((a) => a.action).sort(), ['check', 'uncheck']);
+    const updated = await uow.requirements.findById(req.id);
+    assert.equal(updated?.devStatus, 'unchecked');
     db.close();
   } finally {
     rmSync(dir, { recursive: true, force: true });

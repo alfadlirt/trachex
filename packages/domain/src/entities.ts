@@ -76,6 +76,7 @@ export interface Source {
   ingestedAt: IsoDateTime;
   snapshotId: string | null;
   location: string | null;
+  note: string | null;
 }
 
 export interface Chunk {
@@ -153,6 +154,7 @@ export interface CompletionAudit {
   actorType: ActorType;
   actorId: string | null;
   note: string | null;
+  action: 'check' | 'uncheck';
   checkedAt: IsoDateTime;
 }
 

@@ -1,0 +1,2 @@
+{"file": "docs/architecture.md", "reason": "Completion audit, append-only requirements, ADR 003"}
+{"file": "docs/decisions/003-proposals-before-apply.md", "reason": "Human completion is direct; edits are human-controlled with provenance"}

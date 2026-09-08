@@ -100,6 +100,7 @@ export interface TimelineEvent {
   at: string;
   kind: 'source' | 'proposal' | 'approval' | 'completion';
   description: string;
+  action?: 'check' | 'uncheck';
 }
 
 export async function createProject(
@@ -200,6 +201,7 @@ export async function addSource(uow: UnitOfWork, input: AddSourceInput): Promise
     ingestedAt: nowIso(),
     snapshotId: input.snapshotId ?? null,
     location: input.location?.trim() || null,
+    note: null,
   };
   await uow.sources.create(source);
   return source;
@@ -417,6 +419,7 @@ export async function checkRequirement(
     actorType: input.actorType,
     actorId: input.actorId?.trim() || null,
     note: input.note?.trim() || null,
+    action: 'check',
     checkedAt: now,
   };
   await uow.completionAudits.create(audit);
@@ -471,10 +474,12 @@ export async function buildExportSummary(
   );
   for (const list of audits) {
     for (const audit of list) {
+      const action = audit.action === 'uncheck' ? 'unchecked' : 'checked';
       timeline.push({
         at: audit.checkedAt,
         kind: 'completion',
-        description: `checked ${audit.requirementId} by ${audit.actorType}`,
+        action: audit.action,
+        description: `${action} ${audit.requirementId} by ${audit.actorType}`,
       });
     }
   }

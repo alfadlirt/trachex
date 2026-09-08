@@ -4,7 +4,7 @@ export interface Migration {
   sql: string;
 }
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 4;
 
 export const migrations: Migration[] = [
   {
@@ -243,6 +243,20 @@ SET display_order = (
 );
 
 CREATE INDEX idx_requirements_order ON requirements(ticket_id, display_order, created_at);
+`,
+  },
+  {
+    version: 3,
+    name: 'completion-audit-action',
+    sql: `
+ALTER TABLE completion_audits ADD COLUMN action TEXT NOT NULL DEFAULT 'check';
+`,
+  },
+  {
+    version: 4,
+    name: 'source-note',
+    sql: `
+ALTER TABLE sources ADD COLUMN note TEXT;
 `,
   },
 ];

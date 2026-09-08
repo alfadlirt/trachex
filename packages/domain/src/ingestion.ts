@@ -81,6 +81,7 @@ export async function ingestSource(
     ingestedAt: now,
     snapshotId: snapshot.id,
     location: input.location?.trim() || null,
+    note: null,
   };
   await uow.sources.create(source);
 

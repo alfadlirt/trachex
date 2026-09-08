@@ -52,6 +52,12 @@ Connection manager (`src/connection.ts`):
   order, backfilled by `(created_at, id)`; reads order by
   `display_order, created_at`. New requirements append via
   `nextDisplayOrder` (max + 1). `SCHEMA_VERSION` is bumped with each migration.
+- Provenance: `completion_audits.action` (migration v3) distinguishes
+  `check` | `uncheck`; `sources.note` (migration v4) records the human's
+  reason for a manual add/edit. Human edits are direct but append-only:
+  `editRequirementContent` supersedes the old requirement and creates a new one
+  at the same `display_order` with a fresh `manual` source; content is never
+  rewritten in place.
 
 ## Common Mistakes
 

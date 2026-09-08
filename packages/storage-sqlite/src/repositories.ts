@@ -104,6 +104,7 @@ function sourceFromRow(row: Row): Source {
     ingestedAt: String(row.ingested_at),
     snapshotId: row.snapshot_id == null ? null : String(row.snapshot_id),
     location: row.location == null ? null : String(row.location),
+    note: row.note == null ? null : String(row.note),
   };
 }
 
@@ -197,6 +198,7 @@ function auditFromRow(row: Row): CompletionAudit {
     actorType: String(row.actor_type) as CompletionAudit['actorType'],
     actorId: row.actor_id == null ? null : String(row.actor_id),
     note: row.note == null ? null : String(row.note),
+    action: String(row.action ?? 'check') as CompletionAudit['action'],
     checkedAt: String(row.checked_at),
   };
 }
@@ -449,7 +451,7 @@ export class SqliteSourceRepository implements SourceRepository {
   async create(source: Source): Promise<Source> {
     this.db
       .prepare(
-        'INSERT INTO sources (id, ticket_id, type, attribution, source_event_at, ingested_at, snapshot_id, location) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO sources (id, ticket_id, type, attribution, source_event_at, ingested_at, snapshot_id, location, note) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
       )
       .run(
         source.id,
@@ -460,6 +462,7 @@ export class SqliteSourceRepository implements SourceRepository {
         source.ingestedAt,
         source.snapshotId,
         source.location,
+        source.note,
       );
     return source;
   }
@@ -755,7 +758,7 @@ export class SqliteCompletionAuditRepository implements CompletionAuditRepositor
   async create(audit: CompletionAudit): Promise<CompletionAudit> {
     this.db
       .prepare(
-        'INSERT INTO completion_audits (id, requirement_id, actor_type, actor_id, note, checked_at) VALUES (?, ?, ?, ?, ?, ?)',
+        'INSERT INTO completion_audits (id, requirement_id, actor_type, actor_id, note, action, checked_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
       )
       .run(
         audit.id,
@@ -763,6 +766,7 @@ export class SqliteCompletionAuditRepository implements CompletionAuditRepositor
         audit.actorType,
         audit.actorId,
         audit.note,
+        audit.action,
         audit.checkedAt,
       );
     return audit;
