@@ -36,3 +36,23 @@ Implemented the complete Trachex MVP per docs/ (architecture, implementation-pla
 ### Status
 
 [OK] **Completed**
+
+
+## Session 2: Intro + harness check
+<!-- trellis-session: v=2 fp=24668ad624cf875c -->
+
+**Date**: 2026-09-10
+**Task**: Intro + harness check
+**Branch**: `main`
+
+### Summary
+
+Session start; confirmed running under opencode within Trellis harness on trachex. No code work this session.
+
+### Git Commits
+
+(No commits - planning session)
+
+### Status
+
+[OK] **Completed**
