@@ -30,7 +30,8 @@ export interface Project {
 
 export interface Repository {
   id: string;
-  projectId: string;
+  /** null when the repository is a global per-user registry entry. */
+  projectId: string | null;
   slug: string;
   serviceName: string | null;
   url: string | null;
@@ -51,6 +52,17 @@ export interface Ticket {
   projectId: string;
   key: string;
   title: string;
+  description: string | null;
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+}
+
+/** User-facing subject identity. A subject is persisted with the same immutable
+ * identity as the legacy storage row while the transport is migrated. */
+export interface Subject {
+  id: string;
+  projectId: string;
+  name: string;
   description: string | null;
   createdAt: IsoDateTime;
   updatedAt: IsoDateTime;
@@ -99,6 +111,8 @@ export interface Requirement {
   lifecycleStatus: RequirementLifecycleStatus;
   devStatus: RequirementDevStatus;
   parentLabel: string | null;
+  /** Stable parent item identity; null means a root item. */
+  parentId: string | null;
   displayOrder: number;
   createdAt: IsoDateTime;
   updatedAt: IsoDateTime;

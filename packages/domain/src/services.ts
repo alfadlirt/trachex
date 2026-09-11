@@ -8,6 +8,7 @@ import type {
   Scenario,
   Source,
   SourceType,
+  Subject,
   Ticket,
 } from './entities.ts';
 import { ConflictError, InvalidOperationError, NotFoundError } from './errors.ts';
@@ -21,7 +22,7 @@ export interface CreateProjectInput {
 }
 
 export interface RegisterRepositoryInput {
-  projectId: string;
+  projectId?: string;
   slug: string;
   serviceName?: string;
   url?: string;
@@ -33,6 +34,33 @@ export interface CreateTicketInput {
   key: string;
   title: string;
   description?: string;
+}
+
+export interface CreateSubjectInput {
+  projectId: string;
+  name: string;
+  description?: string;
+}
+
+export async function createSubject(uow: UnitOfWork, input: CreateSubjectInput): Promise<Subject> {
+  const project = await uow.projects.findById(input.projectId);
+  if (!project) throw new NotFoundError('project', input.projectId);
+  const name = input.name.trim();
+  if (!name) throw new InvalidOperationError('subject name must not be empty');
+  if (await uow.subjects.findByProjectAndName(input.projectId, name)) {
+    throw new ConflictError(`subject already exists in project: ${name}`);
+  }
+  const now = nowIso();
+  const subject: Subject = {
+    id: newId(),
+    projectId: input.projectId,
+    name,
+    description: input.description?.trim() || null,
+    createdAt: now,
+    updatedAt: now,
+  };
+  await uow.subjects.create(subject);
+  return subject;
 }
 
 export interface AddSourceInput {
@@ -132,18 +160,20 @@ export async function registerRepository(
   uow: UnitOfWork,
   input: RegisterRepositoryInput,
 ): Promise<void> {
-  const project = await uow.projects.findById(input.projectId);
-  if (!project) {
-    throw new NotFoundError('project', input.projectId);
-  }
-  const existing = await uow.repositories.findByProjectAndSlug(input.projectId, input.slug);
-  if (existing) {
-    throw new ConflictError(`repository slug already exists in project: ${input.slug}`);
-  }
   const now = nowIso();
+  if (input.projectId) {
+    const project = await uow.projects.findById(input.projectId);
+    if (!project) {
+      throw new NotFoundError('project', input.projectId);
+    }
+    const existing = await uow.repositories.findByProjectAndSlug(input.projectId, input.slug);
+    if (existing) {
+      throw new ConflictError(`repository slug already exists in project: ${input.slug}`);
+    }
+  }
   const repository = {
     id: newId(),
-    projectId: input.projectId,
+    projectId: input.projectId ?? null,
     slug: input.slug,
     serviceName: input.serviceName?.trim() || null,
     url: input.url?.trim() || null,
@@ -158,6 +188,46 @@ export async function registerRepository(
     validFrom: now,
     validTo: null,
   });
+}
+
+export async function removeRepository(uow: UnitOfWork, repositoryId: string): Promise<void> {
+  const repository = await uow.repositories.findById(repositoryId);
+  if (!repository) {
+    throw new NotFoundError('repository', repositoryId);
+  }
+  await uow.repositories.remove(repositoryId);
+}
+
+export async function attachRepositoryToSubject(
+  uow: UnitOfWork,
+  subjectId: string,
+  repositoryId: string,
+): Promise<void> {
+  const subject = await uow.subjects.findById(subjectId);
+  if (!subject) {
+    throw new NotFoundError('subject', subjectId);
+  }
+  const repository = await uow.repositories.findById(repositoryId);
+  if (!repository) {
+    throw new NotFoundError('repository', repositoryId);
+  }
+  await uow.repositories.attachToSubject(subjectId, repositoryId);
+}
+
+export async function detachRepositoryFromSubject(
+  uow: UnitOfWork,
+  subjectId: string,
+  repositoryId: string,
+): Promise<void> {
+  const subject = await uow.subjects.findById(subjectId);
+  if (!subject) {
+    throw new NotFoundError('subject', subjectId);
+  }
+  const repository = await uow.repositories.findById(repositoryId);
+  if (!repository) {
+    throw new NotFoundError('repository', repositoryId);
+  }
+  await uow.repositories.detachFromSubject(subjectId, repositoryId);
 }
 
 export async function createTicket(uow: UnitOfWork, input: CreateTicketInput): Promise<Ticket> {
@@ -361,6 +431,7 @@ async function createRequirementFromDraft(
     lifecycleStatus: 'active',
     devStatus: 'unchecked',
     parentLabel: draft.parentLabel?.trim() || null,
+    parentId: null,
     displayOrder: await nextDisplayOrder(uow, ticketId),
     createdAt: now,
     updatedAt: now,

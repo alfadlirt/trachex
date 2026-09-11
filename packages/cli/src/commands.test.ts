@@ -191,6 +191,149 @@ test('check without --yes aborts when confirmation is declined', async () => {
   }
 });
 
+test('subject lifecycle: new, use, info, and active-scope banner', async () => {
+  const appDir = tempAppDir();
+  try {
+    await run(['project', 'create', 'loyalty', '--name', 'Loyalty'], appDir);
+    const created = await captureJson<{ id: string }>(async () =>
+      run(['subject', 'new', '--project', 'loyalty', '--name', 'Discount cap'], appDir),
+    );
+    assert.ok(created.id.length > 0);
+    assert.equal(await run(['subject', 'use', created.id], appDir), 0);
+
+    const infoOut = await captureText(async () => run(['info'], appDir));
+    assert.ok(infoOut.includes('active project: loyalty'));
+    assert.ok(infoOut.includes('active subject: Discount cap'));
+
+    const infoJson = await captureJson<{
+      project: { slug: string };
+      subject: { name: string };
+    }>(async () => run(['info', '--json'], appDir));
+    assert.equal(infoJson.project.slug, 'loyalty');
+    assert.equal(infoJson.subject.name, 'Discount cap');
+
+    assert.equal(await run(['subject', 'use', '--clear'], appDir), 0);
+    const afterClear = await captureText(async () => run(['info'], appDir));
+    assert.ok(afterClear.includes('active subject: (none)'));
+  } finally {
+    rmSync(appDir, { recursive: true, force: true });
+  }
+});
+
+test('project use clears an incompatible active subject', async () => {
+  const appDir = tempAppDir();
+  try {
+    await run(['project', 'create', 'a', '--name', 'A'], appDir);
+    await run(['project', 'create', 'b', '--name', 'B'], appDir);
+    const subject = await captureJson<{ id: string }>(async () =>
+      run(['subject', 'new', '--project', 'a', '--name', 'In A'], appDir),
+    );
+    await run(['subject', 'use', subject.id], appDir);
+    await run(['project', 'use', 'b'], appDir);
+    const infoOut = await captureText(async () => run(['info'], appDir));
+    assert.ok(infoOut.includes('active subject: (none)'));
+  } finally {
+    rmSync(appDir, { recursive: true, force: true });
+  }
+});
+
+test('global repo registry and subject assignment', async () => {
+  const appDir = tempAppDir();
+  try {
+    await run(['project', 'create', 'loyalty', '--name', 'Loyalty'], appDir);
+    await run(['repo', 'add', '--name', 'front-office', '--path', '/repos/fo'], appDir);
+    await run(['repo', 'add', '--name', 'config-service', '--path', '/repos/cfg'], appDir);
+
+    const repos = await captureJson<Array<{ slug: string; id: string }>>(async () =>
+      run(['repo', 'list', '--json'], appDir),
+    );
+    assert.equal(repos.length, 2);
+    const fo = repos.find((r) => r.slug === 'front-office') as { id: string };
+
+    const subject = await captureJson<{ id: string }>(async () =>
+      run(['subject', 'new', '--project', 'loyalty', '--name', 'S1'], appDir),
+    );
+    await run(['subject', 'repo', 'add', subject.id, fo.id], appDir);
+
+    const assigned = await captureJson<Array<{ id: string }>>(async () =>
+      run(['subject', 'repo', 'list', subject.id, '--json'], appDir),
+    );
+    assert.equal(assigned.length, 1);
+    assert.equal(assigned[0]?.id, fo.id);
+
+    await run(['subject', 'repo', 'remove', subject.id, fo.id], appDir);
+    const after = await captureJson<unknown[]>(async () =>
+      run(['subject', 'repo', 'list', subject.id, '--json'], appDir),
+    );
+    assert.equal(after.length, 0);
+  } finally {
+    rmSync(appDir, { recursive: true, force: true });
+  }
+});
+
+test('settings set theme persists and validates', async () => {
+  const appDir = tempAppDir();
+  try {
+    assert.equal(await run(['settings', 'set', 'theme', 'dark'], appDir), 0);
+    assert.equal(await run(['settings', 'set', 'accent', 'cyan'], appDir), 0);
+    const shown = await captureText(async () => run(['settings', 'show'], appDir));
+    assert.ok(shown.includes('"mode":"dark"'));
+    assert.ok(shown.includes('"accent":"cyan"'));
+    const bad = await run(['settings', 'set', 'theme', 'rainbow'], appDir);
+    assert.equal(bad, 2);
+  } finally {
+    rmSync(appDir, { recursive: true, force: true });
+  }
+});
+
+test('checklist tree: parent-id child nests under parent in the view', async () => {
+  const appDir = tempAppDir();
+  try {
+    const fixture = writeFixture(appDir);
+    const fsd = writeFsd(appDir);
+    await run(['project', 'create', 'loyalty', '--name', 'Loyalty'], appDir);
+    await run(
+      ['ticket', 'new', 'TICKET-1', '--project', 'loyalty', '--fsd', fsd, '--fixture', fixture],
+      appDir,
+    );
+    const p = await captureJson<Array<{ proposal: { id: string } }>>(async () =>
+      run(['proposal', 'list', '--project', 'loyalty'], appDir),
+    );
+    await run(
+      ['proposal', 'approve', p[0]?.proposal.id as string, '--project', 'loyalty', '--yes'],
+      appDir,
+    );
+
+    const show = await captureJson<{ checklist: Array<{ id: string }> }>(async () =>
+      run(['ticket', 'show', 'TICKET-1', '--project', 'loyalty'], appDir),
+    );
+    const parentId = show.checklist[0]?.id as string;
+    await run(
+      [
+        'checklist',
+        'add',
+        'TICKET-1',
+        '--project',
+        'loyalty',
+        '--title',
+        'child item',
+        '--parent-id',
+        parentId,
+      ],
+      appDir,
+    );
+
+    const view = await captureJson<{ tree: Array<{ item: { id: string }; children: unknown[] }> }>(
+      async () => run(['checklist', 'list', 'TICKET-1', '--project', 'loyalty', '--json'], appDir),
+    );
+    const root = view.tree.find((t) => t.item.id === parentId);
+    assert.ok(root, 'parent should be a root');
+    assert.equal(root?.children.length, 1);
+  } finally {
+    rmSync(appDir, { recursive: true, force: true });
+  }
+});
+
 async function captureJson<T>(fn: () => Promise<number>): Promise<T> {
   const original = process.stdout.write;
   let buffer = '';

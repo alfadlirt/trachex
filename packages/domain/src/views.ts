@@ -103,10 +103,47 @@ export interface ChecklistItem {
   description: string | null;
   devStatus: Requirement['devStatus'];
   parentLabel: string | null;
+  parentId: string | null;
   displayOrder: number;
   source: Pick<Source, 'type' | 'attribution' | 'location'> | null;
   impacts: Pick<Impact, 'kind' | 'value'>[];
   scenarios: Pick<Scenario, 'text'>[];
+}
+
+export interface ChecklistTree {
+  item: ChecklistItem;
+  children: ChecklistTree[];
+}
+
+/**
+ * Build an arbitrary-depth tree from the flat active list. Items with a
+ * parentId are nested under their parent; root items are ordered by
+ * display_order (falling back to createdAt via the repository ordering).
+ * Orphans (parent missing or superseded) degrade to roots.
+ */
+export function buildChecklistTree(items: ChecklistItem[]): ChecklistTree[] {
+  const byId = new Map<string, ChecklistTree>();
+  for (const item of items) {
+    byId.set(item.id, { item, children: [] });
+  }
+  const roots: ChecklistTree[] = [];
+  for (const tree of byId.values()) {
+    const parent = tree.item.parentId ? byId.get(tree.item.parentId) : undefined;
+    if (parent) {
+      parent.children.push(tree);
+    } else {
+      roots.push(tree);
+    }
+  }
+  const sort = (trees: ChecklistTree[]) => {
+    trees.sort((a, b) => a.item.displayOrder - b.item.displayOrder);
+  };
+  const sortAll = (trees: ChecklistTree[]) => {
+    sort(trees);
+    for (const tree of trees) sortAll(tree.children);
+  };
+  sortAll(roots);
+  return roots;
 }
 
 export interface ChecklistGroup {
@@ -123,6 +160,7 @@ export interface ChecklistView {
   ticketKey: string;
   title: string;
   groups: ChecklistGroup[];
+  tree: ChecklistTree[];
   superseded: SupersededEntry[];
 }
 
@@ -153,6 +191,7 @@ export async function buildChecklistView(
       description: requirement.description,
       devStatus: requirement.devStatus,
       parentLabel: requirement.parentLabel,
+      parentId: requirement.parentId,
       displayOrder: requirement.displayOrder,
       source: source
         ? { type: source.type, attribution: source.attribution, location: source.location }
@@ -195,6 +234,7 @@ export async function buildChecklistView(
     ticketKey: ticket.key,
     title: ticket.title,
     groups: [...groups.entries()].map(([label, items]) => ({ label, items })),
+    tree: buildChecklistTree(active.map(toItem)),
     superseded,
   };
 }

@@ -18,6 +18,7 @@ import type {
   Scenario,
   Snapshot,
   Source,
+  Subject,
   Ticket,
 } from '@trachex/domain';
 import {
@@ -34,6 +35,7 @@ import {
   type SessionRepository,
   type SnapshotRepository,
   type SourceRepository,
+  type SubjectRepository,
   type TicketRepository,
   type UnitOfWork,
 } from '@trachex/domain';
@@ -45,6 +47,7 @@ class MemoryData {
   repositories: Repository[] = [];
   repositoryPaths: RepositoryPath[] = [];
   tickets: Ticket[] = [];
+  subjects: Subject[] = [];
   snapshots: Snapshot[] = [];
   sources: Source[] = [];
   chunks: Chunk[] = [];
@@ -77,9 +80,15 @@ class MemoryUow implements UnitOfWork {
   readonly repositories: RepositoryRepository = {
     create: async (r) => r,
     addPath: async (p) => p,
+    findById: async () => null,
+    listGlobal: async () => [],
     listByProject: async () => [],
     findByProjectAndSlug: async () => null,
     listPaths: async () => [],
+    remove: async () => undefined,
+    listBySubject: async () => [],
+    attachToSubject: async () => undefined,
+    detachFromSubject: async () => undefined,
   };
   readonly tickets: TicketRepository = {
     create: async (t) => {
@@ -91,6 +100,17 @@ class MemoryUow implements UnitOfWork {
     findById: async (id) => this.data.tickets.find((t) => t.id === id) ?? null,
     listByProject: async () => [],
     update: async (t) => t,
+  };
+  readonly subjects: SubjectRepository = {
+    create: async (s) => {
+      this.data.subjects.push(s);
+      return s;
+    },
+    findById: async (id) => this.data.subjects.find((s) => s.id === id) ?? null,
+    findByProjectAndName: async (projectId, name) =>
+      this.data.subjects.find((s) => s.projectId === projectId && s.name === name) ?? null,
+    listByProject: async () => [],
+    update: async (s) => s,
   };
   readonly snapshots: SnapshotRepository = {
     create: async (s) => {

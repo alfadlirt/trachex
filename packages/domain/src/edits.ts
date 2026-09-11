@@ -15,6 +15,7 @@ export interface AddRequirementManualInput extends ManualEditActor {
   title: string;
   description?: string;
   parentLabel?: string;
+  parentId?: string;
   sourceType?: SourceType;
   attribution?: string;
   impacts?: { kind: ImpactKind; value: string }[];
@@ -27,6 +28,16 @@ export async function addRequirementManual(
   const ticket = await uow.tickets.findById(input.ticketId);
   if (!ticket) {
     throw new NotFoundError('ticket', input.ticketId);
+  }
+  const parentId = input.parentId ?? null;
+  if (parentId) {
+    const parent = await uow.requirements.findById(parentId);
+    if (!parent || parent.ticketId !== input.ticketId) {
+      throw new InvalidOperationError('parent does not belong to the same ticket');
+    }
+    if (parent.lifecycleStatus !== 'active') {
+      throw new InvalidOperationError('parent must be an active requirement');
+    }
   }
   const now = nowIso();
   const attribution = input.attribution?.trim() || input.actorId?.trim() || input.actorType;
@@ -52,6 +63,7 @@ export async function addRequirementManual(
     lifecycleStatus: 'active',
     devStatus: 'unchecked',
     parentLabel: input.parentLabel?.trim() || null,
+    parentId,
     displayOrder: await nextDisplayOrder(uow, input.ticketId),
     createdAt: now,
     updatedAt: now,
@@ -117,6 +129,7 @@ export async function editRequirementContent(
     lifecycleStatus: 'active',
     devStatus: old.devStatus,
     parentLabel: (input.parentLabel ?? old.parentLabel)?.trim() || null,
+    parentId: old.parentId,
     displayOrder: old.displayOrder,
     createdAt: now,
     updatedAt: now,

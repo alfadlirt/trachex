@@ -1,0 +1,5 @@
+
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Use the repository's backend quality and forbidden-pattern checks during verification."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Verify actionable missing-context and invalid-scope errors follow project conventions."}
+{"file":".trellis/spec/frontend/directory-structure.md","reason":"Verify dashboard and TUI-adjacent presentation changes against frontend structure conventions."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Review cross-layer data flow and serialization consistency after terminology changes."}

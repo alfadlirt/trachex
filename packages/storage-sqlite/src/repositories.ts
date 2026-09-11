@@ -28,6 +28,8 @@ import type {
   SnapshotRepository,
   Source,
   SourceRepository,
+  Subject,
+  SubjectRepository,
   Ticket,
   TicketRepository,
   UnitOfWork,
@@ -50,7 +52,7 @@ function projectFromRow(row: Row): Project {
 function repositoryFromRow(row: Row): Repository {
   return {
     id: String(row.id),
-    projectId: String(row.project_id),
+    projectId: row.project_id == null ? null : String(row.project_id),
     slug: String(row.slug),
     serviceName: row.service_name == null ? null : String(row.service_name),
     url: row.url == null ? null : String(row.url),
@@ -75,6 +77,17 @@ function ticketFromRow(row: Row): Ticket {
     projectId: String(row.project_id),
     key: String(row.key),
     title: String(row.title),
+    description: row.description == null ? null : String(row.description),
+    createdAt: String(row.created_at),
+    updatedAt: String(row.updated_at),
+  };
+}
+
+function subjectFromRow(row: Row): Subject {
+  return {
+    id: String(row.id),
+    projectId: String(row.project_id),
+    name: String(row.name),
     description: row.description == null ? null : String(row.description),
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
@@ -131,6 +144,7 @@ function requirementFromRow(row: Row): Requirement {
     lifecycleStatus: String(row.lifecycle_status) as Requirement['lifecycleStatus'],
     devStatus: String(row.dev_status) as Requirement['devStatus'],
     parentLabel: row.parent_label == null ? null : String(row.parent_label),
+    parentId: row.parent_id == null ? null : String(row.parent_id),
     displayOrder: Number(row.display_order ?? 0),
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
@@ -322,6 +336,45 @@ export class SqliteRepositoryRepository implements RepositoryRepository {
     return rows.map(repositoryFromRow);
   }
 
+  async findById(id: string): Promise<Repository | null> {
+    const row = this.db.prepare('SELECT * FROM repositories WHERE id = ?').get(id) as
+      | Row
+      | undefined;
+    return row ? repositoryFromRow(row) : null;
+  }
+
+  async listGlobal(): Promise<Repository[]> {
+    const rows = this.db.prepare('SELECT * FROM repositories ORDER BY created_at').all() as Row[];
+    return rows.map(repositoryFromRow);
+  }
+
+  async remove(id: string): Promise<void> {
+    this.db.prepare('DELETE FROM repositories WHERE id = ?').run(id);
+  }
+
+  async listBySubject(subjectId: string): Promise<Repository[]> {
+    const rows = this.db
+      .prepare(
+        'SELECT r.* FROM repositories r JOIN subject_repositories sr ON sr.repository_id = r.id WHERE sr.subject_id = ? ORDER BY r.created_at',
+      )
+      .all(subjectId) as Row[];
+    return rows.map(repositoryFromRow);
+  }
+
+  async attachToSubject(subjectId: string, repositoryId: string): Promise<void> {
+    this.db
+      .prepare(
+        'INSERT INTO subject_repositories (subject_id, repository_id, created_at) VALUES (?, ?, ?)',
+      )
+      .run(subjectId, repositoryId, new Date().toISOString());
+  }
+
+  async detachFromSubject(subjectId: string, repositoryId: string): Promise<void> {
+    this.db
+      .prepare('DELETE FROM subject_repositories WHERE subject_id = ? AND repository_id = ?')
+      .run(subjectId, repositoryId);
+  }
+
   async findByProjectAndSlug(projectId: string, slug: string): Promise<Repository | null> {
     const row = this.db
       .prepare('SELECT * FROM repositories WHERE project_id = ? AND slug = ?')
@@ -384,6 +437,51 @@ export class SqliteTicketRepository implements TicketRepository {
       .prepare('UPDATE tickets SET title = ?, description = ?, updated_at = ? WHERE id = ?')
       .run(ticket.title, ticket.description, ticket.updatedAt, ticket.id);
     return ticket;
+  }
+}
+
+export class SqliteSubjectRepository implements SubjectRepository {
+  private readonly db: Database.Database;
+  constructor(db: Database.Database) {
+    this.db = db;
+  }
+  async create(subject: Subject): Promise<Subject> {
+    this.db
+      .prepare(
+        'INSERT INTO subjects (id, project_id, name, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+      )
+      .run(
+        subject.id,
+        subject.projectId,
+        subject.name,
+        subject.description,
+        subject.createdAt,
+        subject.updatedAt,
+      );
+    return subject;
+  }
+  async findById(id: string): Promise<Subject | null> {
+    const row = this.db.prepare('SELECT * FROM subjects WHERE id = ?').get(id) as Row | undefined;
+    return row ? subjectFromRow(row) : null;
+  }
+  async findByProjectAndName(projectId: string, name: string): Promise<Subject | null> {
+    const row = this.db
+      .prepare('SELECT * FROM subjects WHERE project_id = ? AND name = ?')
+      .get(projectId, name) as Row | undefined;
+    return row ? subjectFromRow(row) : null;
+  }
+  async listByProject(projectId: string): Promise<Subject[]> {
+    return (
+      this.db
+        .prepare('SELECT * FROM subjects WHERE project_id = ? ORDER BY created_at')
+        .all(projectId) as Row[]
+    ).map(subjectFromRow);
+  }
+  async update(subject: Subject): Promise<Subject> {
+    this.db
+      .prepare('UPDATE subjects SET name = ?, description = ?, updated_at = ? WHERE id = ?')
+      .run(subject.name, subject.description, subject.updatedAt, subject.id);
+    return subject;
   }
 }
 
@@ -523,8 +621,8 @@ export class SqliteRequirementRepository implements RequirementRepository {
     this.db
       .prepare(
         `INSERT INTO requirements (id, project_id, ticket_id, title, description, source_id, source_location,
-           lifecycle_status, dev_status, parent_label, display_order, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           lifecycle_status, dev_status, parent_label, parent_id, display_order, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         requirement.id,
@@ -537,6 +635,7 @@ export class SqliteRequirementRepository implements RequirementRepository {
         requirement.lifecycleStatus,
         requirement.devStatus,
         requirement.parentLabel,
+        requirement.parentId,
         requirement.displayOrder,
         requirement.createdAt,
         requirement.updatedAt,
@@ -917,6 +1016,7 @@ export class SqliteUnitOfWork implements UnitOfWork {
   readonly projects: ProjectRepository;
   readonly repositories: RepositoryRepository;
   readonly tickets: TicketRepository;
+  readonly subjects: SubjectRepository;
   readonly snapshots: SnapshotRepository;
   readonly sources: SourceRepository;
   readonly chunks: ChunkRepository;
@@ -931,6 +1031,7 @@ export class SqliteUnitOfWork implements UnitOfWork {
     this.projects = new SqliteProjectRepository(db);
     this.repositories = new SqliteRepositoryRepository(db);
     this.tickets = new SqliteTicketRepository(db);
+    this.subjects = new SqliteSubjectRepository(db);
     this.snapshots = new SqliteSnapshotRepository(db);
     this.sources = new SqliteSourceRepository(db);
     this.chunks = new SqliteChunkRepository(db);

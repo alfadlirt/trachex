@@ -4,7 +4,7 @@ export interface Migration {
   sql: string;
 }
 
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 6;
 
 export const migrations: Migration[] = [
   {
@@ -22,7 +22,7 @@ CREATE TABLE projects (
 
 CREATE TABLE repositories (
   id TEXT PRIMARY KEY,
-  project_id TEXT NOT NULL REFERENCES projects(id),
+  project_id TEXT REFERENCES projects(id),
   slug TEXT NOT NULL,
   service_name TEXT,
   url TEXT,
@@ -257,6 +257,37 @@ ALTER TABLE completion_audits ADD COLUMN action TEXT NOT NULL DEFAULT 'check';
     name: 'source-note',
     sql: `
 ALTER TABLE sources ADD COLUMN note TEXT;
+`,
+  },
+  {
+    version: 5,
+    name: 'subject-identity-and-tree-parent',
+    sql: `
+CREATE TABLE subjects (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id),
+  name TEXT NOT NULL,
+  description TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(project_id, name)
+);
+ALTER TABLE requirements ADD COLUMN parent_id TEXT REFERENCES requirements(id);
+CREATE INDEX idx_subjects_project ON subjects(project_id);
+CREATE INDEX idx_requirements_parent ON requirements(ticket_id, parent_id, display_order);
+`,
+  },
+  {
+    version: 6,
+    name: 'global-repositories-and-subject-assignment',
+    sql: `
+CREATE TABLE subject_repositories (
+  subject_id TEXT NOT NULL REFERENCES subjects(id),
+  repository_id TEXT NOT NULL REFERENCES repositories(id),
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (subject_id, repository_id)
+);
+CREATE INDEX idx_subject_repositories_repo ON subject_repositories(repository_id);
 `,
   },
 ];

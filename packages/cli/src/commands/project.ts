@@ -15,7 +15,17 @@ export async function projectUse(ctx: AppContext, args: { slug: string }) {
     throw new NotFoundError('project', args.slug);
   }
   const config = readGlobalConfig(ctx.appDir);
-  writeGlobalConfig({ ...config, activeProject: args.slug }, ctx.appDir);
+  let activeSubject = config.activeSubject;
+  if (activeSubject) {
+    const subject = await ctx.uow.subjects.findById(activeSubject);
+    if (subject && subject.projectId !== project.id) {
+      activeSubject = undefined;
+    }
+  }
+  writeGlobalConfig(
+    { ...config, activeProject: args.slug, ...(activeSubject ? { activeSubject } : {}) },
+    ctx.appDir,
+  );
   print(`active project: ${args.slug}`);
 }
 

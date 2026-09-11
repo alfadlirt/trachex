@@ -18,6 +18,7 @@ import type {
   Scenario,
   Snapshot,
   Source,
+  Subject,
   Ticket,
 } from './entities.ts';
 import {
@@ -44,6 +45,7 @@ import {
   type SessionRepository,
   type SnapshotRepository,
   type SourceRepository,
+  type SubjectRepository,
   type TicketRepository,
   type UnitOfWork,
 } from './index.ts';
@@ -53,6 +55,7 @@ class MemoryData {
   repositories: Repository[] = [];
   repositoryPaths: RepositoryPath[] = [];
   tickets: Ticket[] = [];
+  subjects: Subject[] = [];
   snapshots: Snapshot[] = [];
   sources: Source[] = [];
   chunks: Chunk[] = [];
@@ -96,12 +99,27 @@ class MemoryUnitOfWork implements UnitOfWork {
       this.data.repositoryPaths.push(path);
       return path;
     },
+    findById: async (id) => this.data.repositories.find((r) => r.id === id) ?? null,
+    listGlobal: async () => this.data.repositories,
     listByProject: async (projectId) =>
       this.data.repositories.filter((r) => r.projectId === projectId),
     findByProjectAndSlug: async (projectId, slug) =>
       this.data.repositories.find((r) => r.projectId === projectId && r.slug === slug) ?? null,
     listPaths: async (repositoryId) =>
       this.data.repositoryPaths.filter((p) => p.repositoryId === repositoryId),
+    remove: async (id) => {
+      this.data.repositories = this.data.repositories.filter((r) => r.id !== id);
+    },
+    listBySubject: async (subjectId) =>
+      this.data.repositories.filter((r) => r.projectId === subjectId),
+    attachToSubject: async (subjectId, repositoryId) => {
+      const repo = this.data.repositories.find((r) => r.id === repositoryId);
+      if (repo) repo.projectId = subjectId;
+    },
+    detachFromSubject: async (subjectId, repositoryId) => {
+      const repo = this.data.repositories.find((r) => r.id === repositoryId);
+      if (repo && repo.projectId === subjectId) repo.projectId = null;
+    },
   };
 
   readonly tickets: TicketRepository = {
@@ -117,6 +135,22 @@ class MemoryUnitOfWork implements UnitOfWork {
       const i = this.data.tickets.findIndex((t) => t.id === ticket.id);
       if (i >= 0) this.data.tickets[i] = ticket;
       return ticket;
+    },
+  };
+
+  readonly subjects: SubjectRepository = {
+    create: async (subject) => {
+      this.data.subjects.push(subject);
+      return subject;
+    },
+    findById: async (id) => this.data.subjects.find((s) => s.id === id) ?? null,
+    findByProjectAndName: async (projectId, name) =>
+      this.data.subjects.find((s) => s.projectId === projectId && s.name === name) ?? null,
+    listByProject: async (projectId) => this.data.subjects.filter((s) => s.projectId === projectId),
+    update: async (subject) => {
+      const i = this.data.subjects.findIndex((s) => s.id === subject.id);
+      if (i >= 0) this.data.subjects[i] = subject;
+      return subject;
     },
   };
 

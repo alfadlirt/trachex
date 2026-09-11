@@ -18,6 +18,7 @@ import type {
   Scenario,
   Snapshot,
   Source,
+  Subject,
   Ticket,
 } from './entities.ts';
 import {
@@ -37,6 +38,7 @@ import {
   type SessionRepository,
   type SnapshotRepository,
   type SourceRepository,
+  type SubjectRepository,
   type TicketRepository,
   type UnitOfWork,
 } from './index.ts';
@@ -46,6 +48,7 @@ class MemoryData {
   repositories: Repository[] = [];
   repositoryPaths: RepositoryPath[] = [];
   tickets: Ticket[] = [];
+  subjects: Subject[] = [];
   snapshots: Snapshot[] = [];
   sources: Source[] = [];
   chunks: Chunk[] = [];
@@ -88,6 +91,18 @@ class MemoryIngestUow implements UnitOfWork {
     update: async (ticket) => ticket,
   };
 
+  readonly subjects: SubjectRepository = {
+    create: async (subject) => {
+      this.data.subjects.push(subject);
+      return subject;
+    },
+    findById: async (id) => this.data.subjects.find((s) => s.id === id) ?? null,
+    findByProjectAndName: async (projectId, name) =>
+      this.data.subjects.find((s) => s.projectId === projectId && s.name === name) ?? null,
+    listByProject: async (projectId) => this.data.subjects.filter((s) => s.projectId === projectId),
+    update: async (subject) => subject,
+  };
+
   readonly snapshots: SnapshotRepository = {
     create: async (snapshot) => {
       this.data.snapshots.push(snapshot);
@@ -127,9 +142,15 @@ class MemoryIngestUow implements UnitOfWork {
   readonly repositories: RepositoryRepository = {
     create: async (repository) => repository,
     addPath: async (path) => path,
+    findById: async () => null,
+    listGlobal: async () => [],
     listByProject: async () => [],
     findByProjectAndSlug: async () => null,
     listPaths: async () => [],
+    remove: async () => undefined,
+    listBySubject: async () => [],
+    attachToSubject: async () => undefined,
+    detachFromSubject: async () => undefined,
   };
 
   readonly requirements: RequirementRepository = {

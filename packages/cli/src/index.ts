@@ -15,6 +15,7 @@ import {
   checklistSupersede,
 } from './commands/checklist.ts';
 import { exportSummary } from './commands/export.ts';
+import { info } from './commands/info.ts';
 import {
   projectCreate,
   projectExport,
@@ -23,8 +24,19 @@ import {
   repoAdd,
 } from './commands/project.ts';
 import { proposalApprove, proposalList, proposalReject } from './commands/proposal.ts';
+import {
+  repoAdd as repoAddGlobal,
+  repoList,
+  repoRemove,
+  subjectRepoAdd,
+  subjectRepoList,
+  subjectRepoRemove,
+} from './commands/repo.ts';
+import { settingsSet, settingsShow } from './commands/settings.ts';
 import { statusProject } from './commands/status.ts';
+import { subjectList, subjectNew, subjectShow, subjectUse } from './commands/subject.ts';
 import { contextIngest, ticketNew, ticketShow } from './commands/ticket.ts';
+import { tui } from './commands/tui.ts';
 import { uncheck } from './commands/uncheck.ts';
 import { resolveProjectSlug } from './context.ts';
 import { CliError, EXIT_DOMAIN, EXIT_ERROR, EXIT_OK, EXIT_USAGE } from './errors.ts';
@@ -61,6 +73,17 @@ export async function runCli(env: CliEnv): Promise<number> {
       print('project repo add <project> --name <slug> --path <path>');
       print('project export <slug> --out <archive>');
       print('context ingest <project> --include <paths>');
+      print('info [--json]');
+      print('subject new --project <slug> --name <name> [--description <d>]');
+      print('subject list --project <slug>');
+      print('subject show <subject-id>');
+      print('subject use <subject-id> | --clear');
+      print(
+        'settings show | settings set theme auto|dark|light|no-color | settings set accent <color>',
+      );
+      print('repo add --name <slug> --path <path>');
+      print('repo list | repo remove <repo-id>');
+      print('subject repo <add|list|remove> <subject-id> [<repo-id>]');
       print('ticket new <key> --project <slug> --fsd <file>');
       print('ticket show <key> --project <slug>');
       print('adjustment <key> --project <slug> --source <type> --from <actor> --note <text>');
@@ -76,7 +99,7 @@ export async function runCli(env: CliEnv): Promise<number> {
       print('checklist supersede <ticketKey> <requirement-id> --project <slug>');
       print('checklist reorder <ticketKey> --project <slug> --order <id1,id2,...>');
       print('uncheck <ticketKey> <requirement-id> --project <slug>');
-      print('dashboard | mcp | infra | eval');
+      print('dashboard | mcp | infra | eval | tui');
       return EXIT_OK;
     }
 
@@ -159,6 +182,109 @@ export async function runCli(env: CliEnv): Promise<number> {
           });
         } else {
           throw new CliError(`unknown context subcommand: ${sub}`, EXIT_USAGE, 'USAGE');
+        }
+        break;
+      }
+      case 'info': {
+        const { values } = parseCommandArgs([sub, ...rest].filter(Boolean) as string[], {
+          json: { type: 'boolean' },
+        });
+        await info(ctx, { json: values.json === true });
+        break;
+      }
+      case 'subject': {
+        const { positionals, values } = parseCommandArgs(rest, {
+          project: { type: 'string' },
+          name: { type: 'string' },
+          description: { type: 'string' },
+          clear: { type: 'boolean' },
+          json: { type: 'boolean' },
+        });
+        if (sub === 'new') {
+          const project = resolveProject(values);
+          const name = typeof values.name === 'string' ? values.name : undefined;
+          if (!project || !name) {
+            throw new CliError(
+              'subject new requires --project <slug> --name <name>',
+              EXIT_USAGE,
+              'USAGE',
+            );
+          }
+          await subjectNew(ctx.uow, {
+            project,
+            name,
+            ...(typeof values.description === 'string' ? { description: values.description } : {}),
+          });
+        } else if (sub === 'list') {
+          const project = resolveProject(values);
+          await subjectList(ctx.uow, { project, json: values.json === true });
+        } else if (sub === 'show') {
+          const id = positionals[0];
+          if (!id) throw new CliError('subject show requires <subject-id>', EXIT_USAGE, 'USAGE');
+          await subjectShow(ctx.uow, { id, json: values.json === true });
+        } else if (sub === 'use') {
+          const id = positionals[0];
+          const clear = values.clear === true;
+          const explicitProject = projectFlag(values);
+          await subjectUse(ctx, {
+            ...(typeof id === 'string' ? { id } : {}),
+            ...(typeof explicitProject === 'string' ? { project: explicitProject } : {}),
+            clear,
+          });
+        } else if (sub === 'repo') {
+          const repoSub = positionals[0];
+          const subjectId = positionals[1];
+          const repoId = positionals[2];
+          if (!subjectId) {
+            throw new CliError(
+              'subject repo requires <add|list|remove> <subject-id>',
+              EXIT_USAGE,
+              'USAGE',
+            );
+          }
+          if (repoSub === 'list') {
+            await subjectRepoList(ctx.uow, { subjectId, json: values.json === true });
+          } else if (repoSub === 'add') {
+            if (!repoId) {
+              throw new CliError(
+                'subject repo add requires <subject-id> <repo-id>',
+                EXIT_USAGE,
+                'USAGE',
+              );
+            }
+            await subjectRepoAdd(ctx, { subjectId, repoId });
+          } else if (repoSub === 'remove') {
+            if (!repoId) {
+              throw new CliError(
+                'subject repo remove requires <subject-id> <repo-id>',
+                EXIT_USAGE,
+                'USAGE',
+              );
+            }
+            await subjectRepoRemove(ctx, { subjectId, repoId });
+          } else {
+            throw new CliError(`unknown subject repo subcommand: ${repoSub}`, EXIT_USAGE, 'USAGE');
+          }
+        } else {
+          throw new CliError(`unknown subject subcommand: ${sub}`, EXIT_USAGE, 'USAGE');
+        }
+        break;
+      }
+      case 'settings': {
+        const { positionals, values } = parseCommandArgs(rest, {
+          json: { type: 'boolean' },
+        });
+        if (sub === 'show') {
+          await settingsShow(ctx, { json: values.json === true });
+        } else if (sub === 'set') {
+          const key = positionals[0];
+          const value = positionals[1];
+          if (!key || !value) {
+            throw new CliError('settings set requires <key> <value>', EXIT_USAGE, 'USAGE');
+          }
+          await settingsSet(ctx, { key, value, json: values.json === true });
+        } else {
+          throw new CliError(`unknown settings subcommand: ${sub}`, EXIT_USAGE, 'USAGE');
         }
         break;
       }
@@ -314,6 +440,7 @@ export async function runCli(env: CliEnv): Promise<number> {
           const { positionals, values } = parseCommandArgs(rest, {
             project: { type: 'string' },
             json: { type: 'boolean' },
+            quiet: { type: 'boolean' },
           });
           const key = positionals[0];
           const project = resolveProject(values);
@@ -324,13 +451,19 @@ export async function runCli(env: CliEnv): Promise<number> {
               'USAGE',
             );
           }
-          await checklistList(ctx, { key, project, json: values.json === true });
+          await checklistList(ctx, {
+            key,
+            project,
+            json: values.json === true,
+            quiet: values.quiet === true,
+          });
         } else if (sub === 'add') {
           const { positionals, values } = parseCommandArgs(rest, {
             project: { type: 'string' },
             title: { type: 'string' },
             description: { type: 'string' },
             parent: { type: 'string' },
+            'parent-id': { type: 'string' },
             from: { type: 'string' },
             note: { type: 'string' },
             json: { type: 'boolean' },
@@ -351,6 +484,7 @@ export async function runCli(env: CliEnv): Promise<number> {
             title,
             ...(typeof values.description === 'string' ? { description: values.description } : {}),
             ...(typeof values.parent === 'string' ? { parent: values.parent } : {}),
+            ...(typeof values['parent-id'] === 'string' ? { parentId: values['parent-id'] } : {}),
             ...(typeof values.from === 'string' ? { from: values.from } : {}),
             ...(typeof values.note === 'string' ? { note: values.note } : {}),
             json: values.json === true,
@@ -462,6 +596,78 @@ export async function runCli(env: CliEnv): Promise<number> {
           ...(typeof values.note === 'string' ? { note: values.note } : {}),
           json: values.json === true,
         });
+        break;
+      }
+      case 'tui': {
+        await tui(ctx);
+        return EXIT_OK;
+      }
+      case 'repo': {
+        const { positionals, values } = parseCommandArgs(rest, {
+          name: { type: 'string', short: 'n' },
+          path: { type: 'string', short: 'p' },
+          project: { type: 'string' },
+          json: { type: 'boolean' },
+        });
+        if (sub === 'add') {
+          const name = typeof values.name === 'string' ? values.name : undefined;
+          const path = typeof values.path === 'string' ? values.path : undefined;
+          if (!name || !path) {
+            throw new CliError(
+              'repo add requires --name <slug> --path <path>',
+              EXIT_USAGE,
+              'USAGE',
+            );
+          }
+          const repoProject = projectFlag(values);
+          await repoAddGlobal(ctx.uow, {
+            name,
+            path,
+            ...(typeof repoProject === 'string' ? { project: repoProject } : {}),
+          });
+        } else if (sub === 'list') {
+          await repoList(ctx.uow, { json: values.json === true });
+        } else if (sub === 'remove') {
+          const id = positionals[0];
+          if (!id) throw new CliError('repo remove requires <repo-id>', EXIT_USAGE, 'USAGE');
+          await repoRemove(ctx.uow, { id });
+        } else if (sub === 'subject') {
+          const repoSub = positionals[0];
+          const subjectId = positionals[1];
+          const repoId = positionals[2];
+          if (!subjectId) {
+            throw new CliError(
+              'repo subject requires <add|list|remove> <subject-id>',
+              EXIT_USAGE,
+              'USAGE',
+            );
+          }
+          if (repoSub === 'list') {
+            await subjectRepoList(ctx.uow, { subjectId, json: values.json === true });
+          } else if (repoSub === 'add') {
+            if (!repoId) {
+              throw new CliError(
+                'repo subject add requires <subject-id> <repo-id>',
+                EXIT_USAGE,
+                'USAGE',
+              );
+            }
+            await subjectRepoAdd(ctx, { subjectId, repoId });
+          } else if (repoSub === 'remove') {
+            if (!repoId) {
+              throw new CliError(
+                'repo subject remove requires <subject-id> <repo-id>',
+                EXIT_USAGE,
+                'USAGE',
+              );
+            }
+            await subjectRepoRemove(ctx, { subjectId, repoId });
+          } else {
+            throw new CliError(`unknown repo subject subcommand: ${repoSub}`, EXIT_USAGE, 'USAGE');
+          }
+        } else {
+          throw new CliError(`unknown repo subcommand: ${sub}`, EXIT_USAGE, 'USAGE');
+        }
         break;
       }
       case 'mcp': {

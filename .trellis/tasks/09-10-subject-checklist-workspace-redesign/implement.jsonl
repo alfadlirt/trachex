@@ -1,0 +1,6 @@
+
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"The redesign changes domain, storage, CLI, API, MCP, dashboard, and TUI contracts across layers."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Scope resolution, banners, config, and tree rendering should be centralized rather than duplicated."}
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"Subject identity, checklist parent/order fields, repository associations, and reset strategy change persistence."}
+{"file":".trellis/spec/backend/directory-structure.md","reason":"New subject, config, repository, and TUI modules must follow backend package structure."}
+{"file":".trellis/spec/frontend/directory-structure.md","reason":"Dashboard terminology and checklist tree presentation need to follow frontend structure."}

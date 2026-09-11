@@ -1,15 +1,17 @@
 import {
   buildChecklistView,
   type ChecklistItem,
+  type ChecklistTree,
   type ChecklistView,
   NotFoundError,
 } from '@trachex/domain';
 import type { AppContext } from '../app.ts';
+import { banner } from '../context.ts';
 import { print, printJson } from '../io.ts';
 
 export async function checklistList(
   ctx: AppContext,
-  args: { key: string; project: string; json: boolean },
+  args: { key: string; project: string; json: boolean; quiet?: boolean },
 ) {
   const project = await ctx.uow.projects.findBySlug(args.project);
   if (!project) {
@@ -20,6 +22,9 @@ export async function checklistList(
     printJson(view);
     return;
   }
+  if (!args.quiet) {
+    print(banner({ projectName: project.name }));
+  }
   print(`Checklist: ${view.ticketKey} — ${view.title}`);
   print('');
   for (const group of view.groups) {
@@ -29,6 +34,11 @@ export async function checklistList(
       print(`  ${box} ${item.title}`);
       printItemDetail(item, '      ');
     }
+  }
+  print('');
+  print('Tree:');
+  for (const root of view.tree) {
+    printTree(root, '');
   }
   if (view.groups.length === 0) {
     print('(no active items — checklist is empty)');
@@ -41,6 +51,16 @@ export async function checklistList(
       print(`  ~~${entry.item.title}~~${by}`);
       printItemDetail(entry.item, '      ');
     }
+  }
+}
+
+function printTree(tree: ChecklistTree, indent: string): void {
+  const item = tree.item;
+  const box = item.devStatus === 'checked' ? '[x]' : '[ ]';
+  print(`${indent}${box} ${item.title}`);
+  printItemDetail(item, `${indent}    `);
+  for (const child of tree.children) {
+    printTree(child, `${indent}    `);
   }
 }
 
@@ -73,6 +93,7 @@ export interface ChecklistAddArgs {
   title: string;
   description?: string;
   parent?: string;
+  parentId?: string;
   from?: string;
   note?: string;
   json: boolean;
@@ -93,6 +114,7 @@ export async function checklistAdd(ctx: AppContext, args: ChecklistAddArgs) {
     title: args.title,
     ...(args.description !== undefined ? { description: args.description } : {}),
     ...(args.parent !== undefined ? { parentLabel: args.parent } : {}),
+    ...(args.parentId !== undefined ? { parentId: args.parentId } : {}),
     ...(args.from !== undefined ? { actorId: args.from } : {}),
     ...(args.note !== undefined ? { note: args.note } : {}),
     actorType: 'human',

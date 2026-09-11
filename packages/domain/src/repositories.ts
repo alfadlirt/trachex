@@ -16,6 +16,7 @@ import type {
   Scenario,
   Snapshot,
   Source,
+  Subject,
   Ticket,
 } from './entities.ts';
 
@@ -30,9 +31,15 @@ export interface ProjectRepository {
 export interface RepositoryRepository {
   create(repository: Repository): Promise<Repository>;
   addPath(path: RepositoryPath): Promise<RepositoryPath>;
+  findById(id: string): Promise<Repository | null>;
+  listGlobal(): Promise<Repository[]>;
   listByProject(projectId: string): Promise<Repository[]>;
   findByProjectAndSlug(projectId: string, slug: string): Promise<Repository | null>;
   listPaths(repositoryId: string): Promise<RepositoryPath[]>;
+  remove(id: string): Promise<void>;
+  listBySubject(subjectId: string): Promise<Repository[]>;
+  attachToSubject(subjectId: string, repositoryId: string): Promise<void>;
+  detachFromSubject(subjectId: string, repositoryId: string): Promise<void>;
 }
 
 export interface TicketRepository {
@@ -41,6 +48,14 @@ export interface TicketRepository {
   findById(id: string): Promise<Ticket | null>;
   listByProject(projectId: string): Promise<Ticket[]>;
   update(ticket: Ticket): Promise<Ticket>;
+}
+
+export interface SubjectRepository {
+  create(subject: Subject): Promise<Subject>;
+  findById(id: string): Promise<Subject | null>;
+  findByProjectAndName(projectId: string, name: string): Promise<Subject | null>;
+  listByProject(projectId: string): Promise<Subject[]>;
+  update(subject: Subject): Promise<Subject>;
 }
 
 export interface SnapshotRepository {
@@ -124,6 +139,7 @@ export interface UnitOfWork {
   projects: ProjectRepository;
   repositories: RepositoryRepository;
   tickets: TicketRepository;
+  subjects: SubjectRepository;
   snapshots: SnapshotRepository;
   sources: SourceRepository;
   chunks: ChunkRepository;

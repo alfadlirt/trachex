@@ -69,9 +69,9 @@ test('migrations apply idempotently and set pragmas', () => {
   const dir = tempDir();
   try {
     const db = openDb(dir);
-    assert.equal(currentSchemaVersion(db), 4);
+    assert.equal(currentSchemaVersion(db), 6);
     migrate(db);
-    assert.equal(currentSchemaVersion(db), 4);
+    assert.equal(currentSchemaVersion(db), 6);
     const journal = db.pragma('journal_mode', { simple: true }) as unknown as string;
     assert.equal(journal, 'wal');
     const fk = db.pragma('foreign_keys', { simple: true }) as unknown as number;

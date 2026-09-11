@@ -57,20 +57,48 @@ Explicit `--project <slug>` always wins over the active-project shortcut, and ev
 
 ```bash
 trachex ticket new TICKET-1234 --project loyalty --fsd FSD-Loyalty-v1.2.md
+trachex ticket show TICKET-1234 --project loyalty   # raw ticket: checklist, proposals, sources
 trachex proposal list --project loyalty
 trachex proposal approve <proposal-id> --project loyalty --yes
+trachex proposal reject <proposal-id> --project loyalty
 ```
 
 `ticket new` snapshots the source, extracts requirements, and stores **pending proposals** — it never silently approves model output.
 
-### 4. Check items and export
+### 4. Read and drive the checklist
+
+Every ticket has a living checklist. The LLM proposes; **you own the list**. See the whole project and any ticket at a glance:
+
+```bash
+trachex status                                        # project rollup: per-ticket progress, open proposals
+trachex checklist list TICKET-1234 --project loyalty  # grouped checklist with source/impact chips
+```
+
+Mark completion — always a deliberate human action (`--yes` skips the confirmation prompt):
 
 ```bash
 trachex check TICKET-1234 <requirement-id> --project loyalty --yes
+trachex uncheck TICKET-1234 <requirement-id> --project loyalty --note "needs more work"
+```
+
+Direct human edits need no LLM proposal. Every edit is recorded with provenance (manual source, actor via `--from`, note), and content edits supersede the old item — nothing is silently overwritten:
+
+```bash
+trachex checklist add TICKET-1234 --project loyalty --title "..." --from "Budi (BA)"
+trachex checklist edit TICKET-1234 <requirement-id> --project loyalty --title "new wording"
+trachex checklist supersede TICKET-1234 <requirement-id> --project loyalty --note "no longer needed"
+trachex checklist reorder TICKET-1234 --project loyalty --order <id1,id2,...>
+```
+
+`status`, `checklist list`, and every edit command also accept `--json`.
+
+### 5. Export
+
+```bash
 trachex export TICKET-1234 --project loyalty --format markdown
 ```
 
-Completion is always a deliberate human action. The export is a Markdown (or JSON) development summary with timeline, current checklist, impacted services/APIs/pages, test scenarios, and full requirement history.
+The export is a Markdown (or JSON) development summary with timeline, current checklist, impacted services/APIs/pages, test scenarios, and full requirement history.
 
 ## Adjustments
 
@@ -81,6 +109,33 @@ trachex adjustment TICKET-1234 --project loyalty --source chat --from "Budi (BA)
 ```
 
 This creates a **pending reconciliation proposal**. After approval, the old requirement is superseded and remains in history; the current checklist shows only the latest valid requirement.
+
+## Planned: subject-centered checklist workspace
+
+> **Status: in development.** The commands below describe the agreed direction and may not be fully available yet. The current, working CLI remains ticket-based until the redesign lands.
+
+The next major direction re-centers Trachex on a **subject** — a general unit of work that replaces the ticket term — with the checklist as the human's control surface:
+
+- **Subjects**: a subject belongs to one project and gets a generated ID plus a readable name. You can create/select one and drop the per-command flags:
+  ```bash
+  trachex subject new --project loyalty --name "Discount cap adjustment"
+  trachex subject use <subject-id>
+  trachex subject use --clear
+  trachex info          # show active project + subject
+  ```
+- **Active context**: `trachex project use <slug>` and `trachex subject use <id>` persist your active project/subject. Selecting a subject also selects its project; switching project clears an incompatible subject. Explicit `--project`/`--subject` always win, and interactive prompts help when nothing is selected.
+- **Checklist as a tree**: checklist items gain parent/child nesting and explicit sibling order, rendered as an indented tree in the terminal with status icons and source/impact details. Editing stays append-only: content edits supersede the old item and keep it in history.
+- **Interactive terminal UI**: `trachex tui` opens a keyboard-driven interface for browsing the tree, check/uncheck, add/edit/supersede, reorder, proposal review, export, and settings — opening the active subject directly when one is set.
+- **Global repositories**: repositories become an optional per-user registry reusable across projects and subjects, with many-to-many subject assignment and optional project defaults:
+  ```bash
+  trachex repo add --name front-office --path /repos/front-office
+  trachex subject repo add <subject-id> <repo-id>
+  ```
+- **User settings**: per-user theme (`auto`, `dark`, `light`, `no-color`) plus accent/banner colors live in a config file, separate from canonical requirement data.
+
+### Future: cross-repository verification
+
+A later capability will let the agent **cross-check** the checklist against ingested documents, source code, and Git history across the repositories assigned to a subject — reporting uncovered requirements, implementation mismatches, stale documentation, and areas where the checklist does not match the implementation. Repository assignment is recorded now so this analysis can be built on it; it is **not** yet performed.
 
 ## Dashboard
 
