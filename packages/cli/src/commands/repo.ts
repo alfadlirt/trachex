@@ -13,12 +13,24 @@ export async function repoAdd(
   uow: UnitOfWork,
   args: { name: string; path: string; project?: string },
 ) {
+  let projectId: string | undefined;
+  if (args.project) {
+    const project = await uow.projects.findBySlug(args.project);
+    if (!project) {
+      throw new NotFoundError('project', args.project);
+    }
+    projectId = project.id;
+  }
   await registerRepository(uow, {
     slug: args.name,
     path: args.path,
-    ...(args.project ? { projectId: args.project } : {}),
+    ...(projectId ? { projectId } : {}),
   });
-  print(`repository ${args.name} registered globally`);
+  print(
+    projectId
+      ? `repository ${args.name} registered for project ${args.project}`
+      : `repository ${args.name} registered globally`,
+  );
 }
 
 export async function repoList(uow: UnitOfWork, args: { json: boolean }) {

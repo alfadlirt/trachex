@@ -46,18 +46,31 @@ Connection manager (`src/connection.ts`):
 - IDs: `TEXT PRIMARY KEY` UUIDs (`crypto.randomUUID()`).
 - Timestamps: ISO-8601 UTC strings (`TEXT`), not `DATETIME`.
 - Uniqueness: `projects.slug` globally unique; `tickets.key` unique per
-  `(project_id, key)`; `repositories.slug` unique per `(project_id, slug)`;
-  `proposal_versions(proposal_id, version)`.
-- Ordering: `requirements.display_order` (migration v2) is the explicit checklist
-  order, backfilled by `(created_at, id)`; reads order by
-  `display_order, created_at`. New requirements append via
-  `nextDisplayOrder` (max + 1). `SCHEMA_VERSION` is bumped with each migration.
+  `(project_id, key)`; `subjects.name` unique per `(project_id, name)`;
+  `repositories.slug` unique per `(project_id, slug)` with `project_id` nullable
+  for global per-user entries (migration v6); `proposal_versions(proposal_id, version)`.
+- Subjects (migration v5): `subjects` rows have a generated immutable ID and a
+  display name. `createSubject` also creates the backing checklist ticket with
+  `ticket.id = subject.id`, `key = subject.id`, `title = subject.name` so the
+  subject and its checklist share one identity.
+- Checklist tree (migration v5): `requirements.parent_id` references another
+  `requirements(id)`; the domain validates the parent belongs to the same ticket
+  and is `active`. `display_order` (migration v2) is the explicit sibling order,
+  backfilled by `(created_at, id)`; reads order by `display_order, created_at`.
+  New requirements append via `nextDisplayOrder` (max + 1).
+- Subject↔repository assignment (migration v6): `subject_repositories` is a
+  many-to-many join keyed `(subject_id, repository_id)`. Repositories are a
+  global per-user registry (`repositories.project_id` nullable) reusable across
+  projects/subjects. Deleting a repository first clears its `subject_repositories`
+  rows, `repository_paths`, and nulls `snapshots.repository_id` because
+  `foreign_keys = ON`.
 - Provenance: `completion_audits.action` (migration v3) distinguishes
   `check` | `uncheck`; `sources.note` (migration v4) records the human's
   reason for a manual add/edit. Human edits are direct but append-only:
   `editRequirementContent` supersedes the old requirement and creates a new one
   at the same `display_order` with a fresh `manual` source; content is never
   rewritten in place.
+- `SCHEMA_VERSION` is bumped with each migration (current: 6).
 
 ## Common Mistakes
 

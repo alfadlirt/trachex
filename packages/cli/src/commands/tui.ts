@@ -1,14 +1,4 @@
-import {
-  cancel,
-  confirm,
-  intro,
-  isCancel,
-  multiselect,
-  outro,
-  select,
-  spinner,
-  text,
-} from '@clack/prompts';
+import { cancel, intro, isCancel, multiselect, outro, select, spinner, text } from '@clack/prompts';
 import {
   buildChecklistView,
   type ChecklistItem,
@@ -16,7 +6,6 @@ import {
   checkRequirement,
   createSubject,
   editRequirementContent,
-  type Requirement,
   reorderChecklist,
   supersedeRequirement,
   uncheckRequirement,
@@ -216,7 +205,11 @@ export async function tui(ctx: AppContext): Promise<void> {
   );
 
   const tickets = await ctx.uow.tickets.listByProject(project.id);
-  const subjectTicket = tickets.find((ticket) => ticket.id === subject.id) ?? tickets[0];
+  // Subjects share their immutable id with the backing ticket row (see
+  // entities.Subject), so the subject's checklist is the ticket with the same
+  // id. Never fall back to an unrelated ticket — mutating the wrong checklist
+  // would be a scope leak.
+  const subjectTicket = tickets.find((ticket) => ticket.id === subject.id) ?? null;
   if (!subjectTicket) {
     outro('No checklist is linked to this subject yet.');
     return;
@@ -315,7 +308,8 @@ export async function tui(ctx: AppContext): Promise<void> {
       spin.stop('Checklist updated');
     } catch (error) {
       spin.stop('Checklist update failed');
-      throw error;
+      const message = error instanceof Error ? error.message : String(error);
+      print(style(`Error: ${message}`, 'red', colorsEnabled));
     }
   }
   outro('TUI closed');

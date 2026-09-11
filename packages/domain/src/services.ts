@@ -60,6 +60,19 @@ export async function createSubject(uow: UnitOfWork, input: CreateSubjectInput):
     updatedAt: now,
   };
   await uow.subjects.create(subject);
+  // A subject shares its immutable identity with the legacy ticket row that
+  // carries the checklist (see entities.Subject). Creating the backing ticket
+  // here keeps `ticket.id === subject.id` true so checklist flows and the TUI
+  // can open a subject's checklist without guessing an unrelated ticket.
+  await uow.tickets.create({
+    id: subject.id,
+    projectId: subject.projectId,
+    key: subject.id,
+    title: subject.name,
+    description: subject.description,
+    createdAt: now,
+    updatedAt: now,
+  });
   return subject;
 }
 

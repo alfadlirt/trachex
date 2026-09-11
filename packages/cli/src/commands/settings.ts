@@ -11,7 +11,7 @@ export async function settingsShow(ctx: AppContext, args: { json: boolean }) {
     printJson({ theme: config.theme ?? { mode: 'auto' } });
     return;
   }
-  print('theme: ' + JSON.stringify(config.theme ?? { mode: 'auto' }));
+  print(`theme: ${JSON.stringify(config.theme ?? { mode: 'auto' })}`);
 }
 
 export async function settingsSet(

@@ -1,6 +1,7 @@
 import { createSubject, NotFoundError, type Subject, type UnitOfWork } from '@trachex/domain';
 import type { AppContext } from '../app.ts';
 import { readGlobalConfig, writeGlobalConfig } from '../context.ts';
+import { CliError } from '../errors.ts';
 import { print, printJson } from '../io.ts';
 
 export async function subjectNew(
@@ -69,7 +70,7 @@ export async function subjectUse(
     return;
   }
   if (!args.id) {
-    throw new Error('subject use requires <subject-id> or --clear');
+    throw new CliError('subject use requires <subject-id> or --clear', 2, 'USAGE');
   }
   const subject = await ctx.uow.subjects.findById(args.id);
   if (!subject) {
@@ -80,7 +81,11 @@ export async function subjectUse(
     throw new NotFoundError('project', subject.projectId);
   }
   if (args.project && args.project !== project.slug) {
-    throw new Error(`subject ${args.id} belongs to project ${project.slug}, not ${args.project}`);
+    throw new CliError(
+      `subject ${args.id} belongs to project ${project.slug}, not ${args.project}`,
+      2,
+      'USAGE',
+    );
   }
   const config = readGlobalConfig(ctx.appDir);
   writeGlobalConfig(

@@ -201,6 +201,15 @@ test('subject lifecycle: new, use, info, and active-scope banner', async () => {
     assert.ok(created.id.length > 0);
     assert.equal(await run(['subject', 'use', created.id], appDir), 0);
 
+    // A subject carries its immutable id onto the backing checklist ticket, so
+    // the checklist can be opened by the subject id without guessing.
+    const checklist = await captureJson<{ ticketKey: string; title: string; tree: unknown[] }>(
+      async () => run(['checklist', 'list', created.id, '--project', 'loyalty', '--json'], appDir),
+    );
+    assert.equal(checklist.ticketKey, created.id);
+    assert.equal(checklist.title, 'Discount cap');
+    assert.deepEqual(checklist.tree, []);
+
     const infoOut = await captureText(async () => run(['info'], appDir));
     assert.ok(infoOut.includes('active project: loyalty'));
     assert.ok(infoOut.includes('active subject: Discount cap'));
@@ -244,11 +253,24 @@ test('global repo registry and subject assignment', async () => {
     await run(['repo', 'add', '--name', 'front-office', '--path', '/repos/fo'], appDir);
     await run(['repo', 'add', '--name', 'config-service', '--path', '/repos/cfg'], appDir);
 
-    const repos = await captureJson<Array<{ slug: string; id: string }>>(async () =>
-      run(['repo', 'list', '--json'], appDir),
+    // --project on a global repo add resolves the slug to the project id and
+    // records a project-scoped repository.
+    await run(
+      ['repo', 'add', '--name', 'proj-repo', '--path', '/repos/prj', '--project', 'loyalty'],
+      appDir,
     );
-    assert.equal(repos.length, 2);
-    const fo = repos.find((r) => r.slug === 'front-office') as { id: string };
+
+    const repos = await captureJson<Array<{ slug: string; id: string; projectId: string | null }>>(
+      async () => run(['repo', 'list', '--json'], appDir),
+    );
+    assert.equal(repos.length, 3);
+    const fo = repos.find((r) => r.slug === 'front-office') as {
+      id: string;
+      projectId: string | null;
+    };
+    assert.equal(fo.projectId, null);
+    const projectRepo = repos.find((r) => r.slug === 'proj-repo') as { projectId: string | null };
+    assert.ok(projectRepo.projectId, 'project-scoped repo should carry the project id');
 
     const subject = await captureJson<{ id: string }>(async () =>
       run(['subject', 'new', '--project', 'loyalty', '--name', 'S1'], appDir),

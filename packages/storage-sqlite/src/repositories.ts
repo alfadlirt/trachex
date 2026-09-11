@@ -349,6 +349,12 @@ export class SqliteRepositoryRepository implements RepositoryRepository {
   }
 
   async remove(id: string): Promise<void> {
+    // Clear dependent rows first so foreign_keys enforcement does not reject
+    // the delete: many-to-many subject assignments, path history, and
+    // snapshot references.
+    this.db.prepare('DELETE FROM subject_repositories WHERE repository_id = ?').run(id);
+    this.db.prepare('DELETE FROM repository_paths WHERE repository_id = ?').run(id);
+    this.db.prepare('UPDATE snapshots SET repository_id = NULL WHERE repository_id = ?').run(id);
     this.db.prepare('DELETE FROM repositories WHERE id = ?').run(id);
   }
 

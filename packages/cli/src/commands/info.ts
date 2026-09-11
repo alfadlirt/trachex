@@ -27,7 +27,7 @@ export async function info(ctx: AppContext, args: { json: boolean }) {
     });
     return;
   }
-  print('active project: ' + (project ? `${projectSlug} (${project.name})` : '(none)'));
-  print('active subject: ' + (subject ? `${subject.name} (${subject.id})` : '(none)'));
-  print('theme: ' + JSON.stringify(config.theme ?? { mode: 'auto' }));
+  print(`active project: ${project ? `${projectSlug} (${project.name})` : '(none)'}`);
+  print(`active subject: ${subject ? `${subject.name} (${subject.id})` : '(none)'}`);
+  print(`theme: ${JSON.stringify(config.theme ?? { mode: 'auto' })}`);
 }
