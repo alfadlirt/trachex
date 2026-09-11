@@ -1,0 +1,5 @@
+
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Verify all packages, tests, shared contracts, and no-secret/no-direct-agent-mutation rules."}
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"Review migration idempotence, archive/delete FK ordering, append-only retention, and derived-index boundaries."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Verify typed errors and TUI recovery for cancellation, failed actions, URL fetch, and destructive operations."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Check parity across TUI, dashboard, MCP, domain, storage, and agent assistant/baseline contracts."}

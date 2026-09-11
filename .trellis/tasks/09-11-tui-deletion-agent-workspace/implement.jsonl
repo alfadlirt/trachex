@@ -1,0 +1,7 @@
+
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"The adjustment spans TUI, domain lifecycle, storage, agent, API/dashboard, and MCP contracts."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Persistent loop, scope validation, proposal decisions, history projections, and assistant contracts must have shared owners."}
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"Archive/delete lifecycle, evidence/review/chat retention, and proposal decision tables require SQLite schema conventions."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"TUI action recovery, deletion guards, URL fetch failures, and agent failures require typed error propagation."}
+{"file":".trellis/spec/backend/directory-structure.md","reason":"New lifecycle, intake, assistant, baseline, review, and TUI modules must follow package boundaries."}
+{"file":".trellis/spec/frontend/directory-structure.md","reason":"Dashboard assistant and evidence/history presentation share the new cross-client contracts."}
