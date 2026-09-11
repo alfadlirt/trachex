@@ -56,3 +56,26 @@ Session start; confirmed running under opencode within Trellis harness on trache
 ### Status
 
 [OK] **Completed**
+
+
+## Session 3: Subject-centered checklist workspace redesign
+<!-- trellis-session: v=2 fp=5f31f583271d7063 -->
+
+**Date**: 2026-09-11
+**Task**: Subject-centered checklist workspace redesign
+**Branch**: `main`
+
+### Summary
+
+Implemented the subject-centered checklist workspace redesign. Added subject entity + backing ticket identity (createSubject), active project/subject selection (project use, subject use/clear, info) persisted in user config with project-switch clearing, checklist tree model (requirements.parent_id + display_order) with tree rendering and validation, global per-user repository registry with many-to-many subject assignment (repo + subject repo commands), user settings (theme auto/dark/light/no-color + accent), and a styled form-driven 'trachex tui' built on @clack/prompts (project/subject select, checklist navigation, CRUD/check/uncheck/reorder/settings forms, default Trachex colors, no-color support). Full-scope quality check fixed 9 issues (subject↔ticket linkage, repo slug→id, FK cleanup, TUI safety, typed errors). Updated README (planned direction + future cross-repo verification) and backend specs. Verified: lint, typecheck, test (10/10), build all green.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ab8bddc` | feat(subject-workspace): subject-centered checklist redesign with active context, tree checklist, global repos, styled TUI |
+| `959eff0` | fix(subject-workspace): full-scope quality check — subject↔ticket linkage, repo scope, FK cleanup, TUI safety, spec update |
+
+### Status
+
+[OK] **Completed**
