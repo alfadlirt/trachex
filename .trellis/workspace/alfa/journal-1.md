@@ -79,3 +79,26 @@ Implemented the subject-centered checklist workspace redesign. Added subject ent
 ### Status
 
 [OK] **Completed**
+
+
+## Session 4: Persistent TUI Workspace UX
+<!-- trellis-session: v=2 fp=4e1c41482e6cb3cf -->
+
+**Date**: 2026-09-11
+**Task**: Persistent TUI Workspace UX
+**Branch**: `main`
+
+### Summary
+
+Implemented and verified the persistent Trachex TUI lifecycle: ASCII banner loading, terminal clearing, explicit home/project/subject/checklist navigation, Back/cancellation/Ctrl+C handling, persisted project and subject restoration, stale-context cleanup, grouped checklist and danger-zone menus, subject/checklist status previews, and archive/delete navigation. Verified CLI and repository typecheck, tests, lint, Biome, build, and diff checks.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `33c3f54` | feat: improve persistent TUI workspace |
+| `9bcf71c` | feat: add TUI lifecycle and subject baseline |
+
+### Status
+
+[OK] **Completed**

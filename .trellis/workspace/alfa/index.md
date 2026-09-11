@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 3
+- **Total Sessions**: 4
 - **Last Active**: 2026-09-11
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~81 | Active |
+| `journal-1.md` | ~104 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 4 | 2026-09-11 | Persistent TUI Workspace UX | `33c3f54`, `9bcf71c` | `main` |
 | 3 | 2026-09-11 | Subject-centered checklist workspace redesign | `ab8bddc`, `959eff0` | `main` |
 | 2 | 2026-09-10 | Intro + harness check | - | `main` |
 | 1 | 2026-09-07 | Trachex MVP: full build across 9 phases | `07c1e50`, `bd30199`, `ca196f7`, `0d76447`, `1c2331a`, `a9d1a3d`, `d65fb0b`, `94388f9`, `e5bfcfc`, `598c1d0` | `main` |
