@@ -1,4 +1,6 @@
 import type {
+  AgentRepository,
+  AgentRun,
   ChatMessage,
   ChatSession,
   Chunk,
@@ -6,6 +8,7 @@ import type {
   CompletionAudit,
   CompletionAuditRepository,
   ErrorRecord,
+  EvidenceReference,
   ExportArtifact,
   ExportRepository,
   Impact,
@@ -20,6 +23,7 @@ import type {
   Requirement,
   RequirementRelationship,
   RequirementRepository,
+  ReviewFinding,
   Scenario,
   SearchRepository,
   SearchResult,
@@ -46,6 +50,9 @@ function projectFromRow(row: Row): Project {
     description: row.description == null ? null : String(row.description),
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
+    ...(row.lifecycle_status !== undefined
+      ? { lifecycleStatus: String(row.lifecycle_status) as 'active' | 'archived' }
+      : {}),
   };
 }
 
@@ -91,6 +98,9 @@ function subjectFromRow(row: Row): Subject {
     description: row.description == null ? null : String(row.description),
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
+    ...(row.lifecycle_status !== undefined
+      ? { lifecycleStatus: String(row.lifecycle_status) as 'active' | 'archived' }
+      : {}),
   };
 }
 
@@ -270,10 +280,12 @@ export class SqliteProjectRepository implements ProjectRepository {
     return project;
   }
 
-  async findBySlug(slug: string): Promise<Project | null> {
-    const row = this.db.prepare('SELECT * FROM projects WHERE slug = ?').get(slug) as
-      | Row
-      | undefined;
+  async findBySlug(slug: string, includeArchived = false): Promise<Project | null> {
+    const row = this.db
+      .prepare(
+        `SELECT * FROM projects WHERE slug = ? ${includeArchived ? '' : "AND lifecycle_status = 'active'"}`,
+      )
+      .get(slug) as Row | undefined;
     return row ? projectFromRow(row) : null;
   }
 
@@ -282,8 +294,12 @@ export class SqliteProjectRepository implements ProjectRepository {
     return row ? projectFromRow(row) : null;
   }
 
-  async list(): Promise<Project[]> {
-    const rows = this.db.prepare('SELECT * FROM projects ORDER BY created_at').all() as Row[];
+  async list(includeArchived = false): Promise<Project[]> {
+    const rows = this.db
+      .prepare(
+        `SELECT * FROM projects ${includeArchived ? '' : "WHERE lifecycle_status = 'active'"} ORDER BY created_at`,
+      )
+      .all() as Row[];
     return rows.map(projectFromRow);
   }
 
@@ -294,6 +310,85 @@ export class SqliteProjectRepository implements ProjectRepository {
       )
       .run(project.slug, project.name, project.description, project.updatedAt, project.id);
     return project;
+  }
+
+  async archive(id: string): Promise<void> {
+    const tx = this.db.transaction(() => {
+      const now = new Date().toISOString();
+      this.db
+        .prepare("UPDATE projects SET lifecycle_status = 'archived', updated_at = ? WHERE id = ?")
+        .run(now, id);
+      this.db
+        .prepare(
+          "UPDATE subjects SET lifecycle_status = 'archived', updated_at = ? WHERE project_id = ?",
+        )
+        .run(now, id);
+      this.db
+        .prepare(
+          "UPDATE requirements SET lifecycle_status = 'archived', updated_at = ? WHERE project_id = ? AND lifecycle_status = 'active'",
+        )
+        .run(now, id);
+    });
+    tx();
+  }
+  async permanentDelete(id: string, force: boolean): Promise<void> {
+    if (!force) throw new Error('permanent project deletion requires force');
+    const tx = this.db.transaction(() => {
+      const ticketIds = (
+        this.db.prepare('SELECT id FROM tickets WHERE project_id = ?').all(id) as Row[]
+      ).map((row) => String(row.id));
+      for (const ticketId of ticketIds) {
+        const proposalIds = (
+          this.db.prepare('SELECT id FROM proposals WHERE ticket_id = ?').all(ticketId) as Row[]
+        ).map((row) => String(row.id));
+        for (const proposalId of proposalIds)
+          this.db.prepare('DELETE FROM proposal_versions WHERE proposal_id = ?').run(proposalId);
+        this.db.prepare('DELETE FROM proposals WHERE ticket_id = ?').run(ticketId);
+        const requirementIds = (
+          this.db.prepare('SELECT id FROM requirements WHERE ticket_id = ?').all(ticketId) as Row[]
+        ).map((row) => String(row.id));
+        for (const requirementId of requirementIds) {
+          this.db
+            .prepare('DELETE FROM completion_audits WHERE requirement_id = ?')
+            .run(requirementId);
+          this.db.prepare('DELETE FROM impacts WHERE requirement_id = ?').run(requirementId);
+          this.db.prepare('DELETE FROM scenarios WHERE requirement_id = ?').run(requirementId);
+        }
+        this.db
+          .prepare(
+            'DELETE FROM requirement_relationships WHERE from_requirement_id IN (SELECT id FROM requirements WHERE ticket_id = ?) OR to_requirement_id IN (SELECT id FROM requirements WHERE ticket_id = ?)',
+          )
+          .run(ticketId, ticketId);
+        this.db.prepare('DELETE FROM requirements WHERE ticket_id = ?').run(ticketId);
+        this.db.prepare('DELETE FROM sources WHERE ticket_id = ?').run(ticketId);
+        this.db.prepare('DELETE FROM sessions WHERE ticket_id = ?').run(ticketId);
+        this.db.prepare('DELETE FROM tickets WHERE id = ?').run(ticketId);
+      }
+      // Repository paths and subject assignments reference repositories and
+      // must be removed before the repository rows while foreign keys are on.
+      this.db
+        .prepare(
+          'DELETE FROM repository_paths WHERE repository_id IN (SELECT id FROM repositories WHERE project_id = ?)',
+        )
+        .run(id);
+      this.db
+        .prepare(
+          'DELETE FROM subject_repositories WHERE subject_id IN (SELECT id FROM subjects WHERE project_id = ?)',
+        )
+        .run(id);
+      this.db.prepare('DELETE FROM subjects WHERE project_id = ?').run(id);
+      this.db.prepare('DELETE FROM repositories WHERE project_id = ?').run(id);
+      // Chunks are owned by snapshots; remove them before snapshots.
+      this.db
+        .prepare(
+          'DELETE FROM chunks WHERE snapshot_id IN (SELECT id FROM snapshots WHERE project_id = ?)',
+        )
+        .run(id);
+      this.db.prepare('DELETE FROM snapshots WHERE project_id = ?').run(id);
+      this.db.prepare('DELETE FROM export_artifacts WHERE project_id = ?').run(id);
+      this.db.prepare('DELETE FROM projects WHERE id = ?').run(id);
+    });
+    tx();
   }
 }
 
@@ -476,10 +571,12 @@ export class SqliteSubjectRepository implements SubjectRepository {
       .get(projectId, name) as Row | undefined;
     return row ? subjectFromRow(row) : null;
   }
-  async listByProject(projectId: string): Promise<Subject[]> {
+  async listByProject(projectId: string, includeArchived = false): Promise<Subject[]> {
     return (
       this.db
-        .prepare('SELECT * FROM subjects WHERE project_id = ? ORDER BY created_at')
+        .prepare(
+          `SELECT * FROM subjects WHERE project_id = ? ${includeArchived ? '' : "AND lifecycle_status = 'active'"} ORDER BY created_at`,
+        )
         .all(projectId) as Row[]
     ).map(subjectFromRow);
   }
@@ -488,6 +585,44 @@ export class SqliteSubjectRepository implements SubjectRepository {
       .prepare('UPDATE subjects SET name = ?, description = ?, updated_at = ? WHERE id = ?')
       .run(subject.name, subject.description, subject.updatedAt, subject.id);
     return subject;
+  }
+
+  async archive(id: string): Promise<void> {
+    this.db
+      .prepare("UPDATE subjects SET lifecycle_status = 'archived', updated_at = ? WHERE id = ?")
+      .run(new Date().toISOString(), id);
+  }
+  async permanentDelete(id: string, force: boolean): Promise<void> {
+    if (!force) throw new Error('permanent subject deletion requires force');
+    const tx = this.db.transaction(() => {
+      this.db.prepare('DELETE FROM subject_repositories WHERE subject_id = ?').run(id);
+      const requirementIds = (
+        this.db.prepare('SELECT id FROM requirements WHERE ticket_id = ?').all(id) as Row[]
+      ).map((row) => String(row.id));
+      for (const requirementId of requirementIds) {
+        this.db
+          .prepare('DELETE FROM completion_audits WHERE requirement_id = ?')
+          .run(requirementId);
+        this.db.prepare('DELETE FROM impacts WHERE requirement_id = ?').run(requirementId);
+        this.db.prepare('DELETE FROM scenarios WHERE requirement_id = ?').run(requirementId);
+      }
+      this.db
+        .prepare(
+          'DELETE FROM requirement_relationships WHERE from_requirement_id IN (SELECT id FROM requirements WHERE ticket_id = ?) OR to_requirement_id IN (SELECT id FROM requirements WHERE ticket_id = ?)',
+        )
+        .run(id, id);
+      this.db.prepare('DELETE FROM requirements WHERE ticket_id = ?').run(id);
+      const proposalIds = (
+        this.db.prepare('SELECT id FROM proposals WHERE ticket_id = ?').all(id) as Row[]
+      ).map((row) => String(row.id));
+      for (const proposalId of proposalIds)
+        this.db.prepare('DELETE FROM proposal_versions WHERE proposal_id = ?').run(proposalId);
+      this.db.prepare('DELETE FROM proposals WHERE ticket_id = ?').run(id);
+      this.db.prepare('DELETE FROM sources WHERE ticket_id = ?').run(id);
+      this.db.prepare('DELETE FROM tickets WHERE id = ?').run(id);
+      this.db.prepare('DELETE FROM subjects WHERE id = ?').run(id);
+    });
+    tx();
   }
 }
 
@@ -681,6 +816,15 @@ export class SqliteRequirementRepository implements RequirementRepository {
     return rows.map(requirementFromRow);
   }
 
+  async listArchivedByTicket(ticketId: string): Promise<Requirement[]> {
+    const rows = this.db
+      .prepare(
+        "SELECT * FROM requirements WHERE ticket_id = ? AND lifecycle_status = 'archived' ORDER BY display_order, created_at",
+      )
+      .all(ticketId) as Row[];
+    return rows.map(requirementFromRow);
+  }
+
   async update(requirement: Requirement): Promise<Requirement> {
     this.db
       .prepare(
@@ -701,6 +845,26 @@ export class SqliteRequirementRepository implements RequirementRepository {
         requirement.id,
       );
     return requirement;
+  }
+
+  async archiveSubtree(id: string): Promise<void> {
+    const tx = this.db.transaction((root: string) => {
+      const ids = [root];
+      for (let i = 0; i < ids.length; i += 1) {
+        const rows = this.db
+          .prepare(
+            "SELECT id FROM requirements WHERE parent_id = ? AND lifecycle_status = 'active'",
+          )
+          .all(ids[i]) as Row[];
+        ids.push(...rows.map((row) => String(row.id)));
+      }
+      const stmt = this.db.prepare(
+        "UPDATE requirements SET lifecycle_status = 'archived', updated_at = ? WHERE id = ?",
+      );
+      const now = new Date().toISOString();
+      for (const requirementId of ids) stmt.run(now, requirementId);
+    });
+    tx(id);
   }
 
   async addRelationship(relationship: RequirementRelationship): Promise<RequirementRelationship> {
@@ -975,6 +1139,125 @@ export class SqliteExportRepository implements ExportRepository {
   }
 }
 
+function runFromRow(row: Row): AgentRun {
+  return {
+    id: String(row.id),
+    subjectId: String(row.subject_id),
+    kind: String(row.kind) as AgentRun['kind'],
+    metadata: String(row.metadata),
+    createdAt: String(row.created_at),
+  };
+}
+function findingFromRow(row: Row): ReviewFinding {
+  return {
+    id: String(row.id),
+    subjectId: String(row.subject_id),
+    kind: String(row.kind) as ReviewFinding['kind'],
+    severity: String(row.severity) as ReviewFinding['severity'],
+    confidence: Number(row.confidence),
+    summary: String(row.summary),
+    evidence: JSON.parse(String(row.evidence)) as string[],
+    affectedRequirementId:
+      row.affected_requirement_id == null ? null : String(row.affected_requirement_id),
+    affectedRepositoryId:
+      row.affected_repository_id == null ? null : String(row.affected_repository_id),
+    suggestedAction: row.suggested_action == null ? null : String(row.suggested_action),
+    status: String(row.status) as ReviewFinding['status'],
+    runId: String(row.run_id),
+    createdAt: String(row.created_at),
+  };
+}
+function evidenceReferenceFromRow(row: Row): EvidenceReference {
+  return {
+    id: String(row.id),
+    subjectId: String(row.subject_id),
+    sourceId: row.source_id == null ? null : String(row.source_id),
+    chunkId: row.chunk_id == null ? null : String(row.chunk_id),
+    excerpt: String(row.excerpt),
+    retrievalMetadata: String(row.retrieval_metadata),
+    createdAt: String(row.created_at),
+  };
+}
+export class SqliteAgentRepository implements AgentRepository {
+  private readonly db: Database.Database;
+  constructor(db: Database.Database) {
+    this.db = db;
+  }
+  async createRun(run: AgentRun): Promise<AgentRun> {
+    this.db
+      .prepare(
+        'INSERT INTO agent_runs (id, subject_id, kind, metadata, created_at) VALUES (?, ?, ?, ?, ?)',
+      )
+      .run(run.id, run.subjectId, run.kind, run.metadata, run.createdAt);
+    return run;
+  }
+  async listRuns(subjectId: string): Promise<AgentRun[]> {
+    return (
+      this.db
+        .prepare('SELECT * FROM agent_runs WHERE subject_id = ? ORDER BY created_at')
+        .all(subjectId) as Row[]
+    ).map(runFromRow);
+  }
+  async createFinding(finding: ReviewFinding): Promise<ReviewFinding> {
+    this.db
+      .prepare(
+        'INSERT INTO review_findings (id, subject_id, kind, severity, confidence, summary, evidence, affected_requirement_id, affected_repository_id, suggested_action, status, run_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      )
+      .run(
+        finding.id,
+        finding.subjectId,
+        finding.kind,
+        finding.severity,
+        finding.confidence,
+        finding.summary,
+        JSON.stringify(finding.evidence),
+        finding.affectedRequirementId,
+        finding.affectedRepositoryId,
+        finding.suggestedAction,
+        finding.status,
+        finding.runId,
+        finding.createdAt,
+      );
+    return finding;
+  }
+  async listFindings(subjectId: string): Promise<ReviewFinding[]> {
+    return (
+      this.db
+        .prepare('SELECT * FROM review_findings WHERE subject_id = ? ORDER BY created_at')
+        .all(subjectId) as Row[]
+    ).map(findingFromRow);
+  }
+  async updateFinding(finding: ReviewFinding): Promise<ReviewFinding> {
+    this.db
+      .prepare('UPDATE review_findings SET status = ? WHERE id = ?')
+      .run(finding.status, finding.id);
+    return finding;
+  }
+  async createEvidenceReference(reference: EvidenceReference): Promise<EvidenceReference> {
+    this.db
+      .prepare(
+        'INSERT INTO evidence_references (id, subject_id, source_id, chunk_id, excerpt, retrieval_metadata, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      )
+      .run(
+        reference.id,
+        reference.subjectId,
+        reference.sourceId,
+        reference.chunkId,
+        reference.excerpt,
+        reference.retrievalMetadata,
+        reference.createdAt,
+      );
+    return reference;
+  }
+  async listEvidenceReferences(subjectId: string): Promise<EvidenceReference[]> {
+    return (
+      this.db
+        .prepare('SELECT * FROM evidence_references WHERE subject_id = ? ORDER BY created_at')
+        .all(subjectId) as Row[]
+    ).map(evidenceReferenceFromRow);
+  }
+}
+
 function escapeFtsQuery(query: string): string {
   const words = query
     .split(/\s+/)
@@ -1032,6 +1315,7 @@ export class SqliteUnitOfWork implements UnitOfWork {
   readonly sessions: SessionRepository;
   readonly exports: ExportRepository;
   readonly search: SearchRepository;
+  readonly agents: AgentRepository;
 
   constructor(db: Database.Database) {
     this.projects = new SqliteProjectRepository(db);
@@ -1047,5 +1331,6 @@ export class SqliteUnitOfWork implements UnitOfWork {
     this.sessions = new SqliteSessionRepository(db);
     this.exports = new SqliteExportRepository(db);
     this.search = new SqliteSearchRepository(db);
+    this.agents = new SqliteAgentRepository(db);
   }
 }

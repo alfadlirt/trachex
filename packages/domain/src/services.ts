@@ -76,6 +76,102 @@ export async function createSubject(uow: UnitOfWork, input: CreateSubjectInput):
   return subject;
 }
 
+export async function archiveProject(uow: UnitOfWork, projectId: string): Promise<void> {
+  const project = await uow.projects.findById(projectId);
+  if (!project) throw new NotFoundError('project', projectId);
+  if (!uow.projects.archive) throw new InvalidOperationError('project archiving is unavailable');
+  await uow.projects.archive(projectId);
+}
+
+export async function permanentlyDeleteProject(
+  uow: UnitOfWork,
+  projectId: string,
+  force: boolean,
+): Promise<void> {
+  const project = await uow.projects.findById(projectId);
+  if (!project) throw new NotFoundError('project', projectId);
+  if (!force) throw new InvalidOperationError('permanent project deletion requires force=true');
+  if (!uow.projects.permanentDelete)
+    throw new InvalidOperationError('permanent project deletion is unavailable');
+  await uow.projects.permanentDelete(projectId, force);
+}
+
+export async function archiveSubject(uow: UnitOfWork, subjectId: string): Promise<void> {
+  const subject = await uow.subjects.findById(subjectId);
+  if (!subject) throw new NotFoundError('subject', subjectId);
+  if (!uow.subjects.archive) throw new InvalidOperationError('subject archiving is unavailable');
+  await uow.subjects.archive(subjectId);
+  const ticket = await uow.tickets.findById(subjectId);
+  if (ticket && uow.requirements.archiveSubtree) {
+    const requirements = await uow.requirements.listByTicket(ticket.id);
+    for (const requirement of requirements.filter((item) => item.lifecycleStatus === 'active')) {
+      await uow.requirements.archiveSubtree(requirement.id);
+    }
+  }
+}
+
+export async function permanentlyDeleteSubject(
+  uow: UnitOfWork,
+  subjectId: string,
+  force: boolean,
+): Promise<void> {
+  const subject = await uow.subjects.findById(subjectId);
+  if (!subject) throw new NotFoundError('subject', subjectId);
+  if (!force) throw new InvalidOperationError('permanent subject deletion requires force=true');
+  if (!uow.subjects.permanentDelete)
+    throw new InvalidOperationError('permanent subject deletion is unavailable');
+  await uow.subjects.permanentDelete(subjectId, force);
+}
+
+export async function archiveRequirement(uow: UnitOfWork, requirementId: string): Promise<void> {
+  if (!(await uow.requirements.findById(requirementId)))
+    throw new NotFoundError('requirement', requirementId);
+  if (!uow.requirements.archiveSubtree)
+    throw new InvalidOperationError('requirement archiving is unavailable');
+  await uow.requirements.archiveSubtree(requirementId);
+}
+
+export interface BaselineContext {
+  subject: Subject;
+  ticket: Ticket;
+  checklist: Requirement[];
+  history: Requirement[];
+  impacts: Impact[];
+  scenarios: Scenario[];
+  sources: Source[];
+  repositories: Awaited<ReturnType<UnitOfWork['repositories']['listBySubject']>>;
+  openProposals: Proposal[];
+  evidence: Awaited<ReturnType<NonNullable<UnitOfWork['agents']>['listEvidenceReferences']>>;
+  findings: Awaited<ReturnType<NonNullable<UnitOfWork['agents']>['listFindings']>>;
+}
+
+export async function buildSubjectBaseline(
+  uow: UnitOfWork,
+  subjectId: string,
+): Promise<BaselineContext> {
+  const subject = await uow.subjects.findById(subjectId);
+  if (!subject) throw new NotFoundError('subject', subjectId);
+  const ticket = await uow.tickets.findById(subject.id);
+  if (!ticket || ticket.projectId !== subject.projectId)
+    throw new NotFoundError('ticket', subject.id);
+  const requirements = await uow.requirements.listByTicket(ticket.id);
+  const proposals = await uow.proposals.listByTicket(ticket.id);
+  const agents = uow.agents;
+  return {
+    subject,
+    ticket,
+    checklist: requirements.filter((item) => item.lifecycleStatus === 'active'),
+    history: requirements.filter((item) => item.lifecycleStatus !== 'active'),
+    impacts: await uow.requirements.listImpactsByTicket(ticket.id),
+    scenarios: await uow.requirements.listScenariosByTicket(ticket.id),
+    sources: await uow.sources.listByTicket(ticket.id),
+    repositories: await uow.repositories.listBySubject(subject.id),
+    openProposals: proposals.filter((proposal) => proposal.status === 'pending'),
+    evidence: agents ? await agents.listEvidenceReferences(subject.id) : [],
+    findings: agents ? await agents.listFindings(subject.id) : [],
+  };
+}
+
 export interface AddSourceInput {
   ticketId: string;
   type: SourceType;

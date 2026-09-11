@@ -18,6 +18,7 @@ import { exportSummary } from './commands/export.ts';
 import { info } from './commands/info.ts';
 import {
   projectCreate,
+  projectDelete,
   projectExport,
   projectList,
   projectUse,
@@ -34,7 +35,13 @@ import {
 } from './commands/repo.ts';
 import { settingsSet, settingsShow } from './commands/settings.ts';
 import { statusProject } from './commands/status.ts';
-import { subjectList, subjectNew, subjectShow, subjectUse } from './commands/subject.ts';
+import {
+  subjectDelete,
+  subjectList,
+  subjectNew,
+  subjectShow,
+  subjectUse,
+} from './commands/subject.ts';
 import { contextIngest, ticketNew, ticketShow } from './commands/ticket.ts';
 import { tui } from './commands/tui.ts';
 import { uncheck } from './commands/uncheck.ts';
@@ -69,6 +76,7 @@ export async function runCli(env: CliEnv): Promise<number> {
       print('');
       print('project create <slug> --name <name>');
       print('project use <slug>');
+      print('project delete <slug> --force --confirm-name <exact name>');
       print('project list');
       print('project repo add <project> --name <slug> --path <path>');
       print('project export <slug> --out <archive>');
@@ -78,6 +86,7 @@ export async function runCli(env: CliEnv): Promise<number> {
       print('subject list --project <slug>');
       print('subject show <subject-id>');
       print('subject use <subject-id> | --clear');
+      print('subject delete <subject-id> --force --confirm-name <exact name>');
       print(
         'settings show | settings set theme auto|dark|light|no-color | settings set accent <color>',
       );
@@ -113,6 +122,20 @@ export async function runCli(env: CliEnv): Promise<number> {
           if (!slug) throw new CliError('project create requires a slug', EXIT_USAGE, 'USAGE');
           const name = typeof values.name === 'string' ? values.name : slug;
           await projectCreate(ctx.uow, { slug, name });
+        } else if (sub === 'delete') {
+          const { positionals, values } = parseCommandArgs(rest, {
+            force: { type: 'boolean' },
+            'confirm-name': { type: 'string' },
+          });
+          const slug = positionals[0];
+          if (!slug) throw new CliError('project delete requires <slug>', EXIT_USAGE, 'USAGE');
+          await projectDelete(ctx, {
+            slug,
+            force: values.force === true,
+            ...(typeof values['confirm-name'] === 'string'
+              ? { confirmName: values['confirm-name'] }
+              : {}),
+          });
         } else if (sub === 'use') {
           const { positionals } = parseCommandArgs(rest, {});
           const slug = positionals[0];
@@ -222,6 +245,20 @@ export async function runCli(env: CliEnv): Promise<number> {
           const id = positionals[0];
           if (!id) throw new CliError('subject show requires <subject-id>', EXIT_USAGE, 'USAGE');
           await subjectShow(ctx.uow, { id, json: values.json === true });
+        } else if (sub === 'delete') {
+          const { positionals, values } = parseCommandArgs(rest, {
+            force: { type: 'boolean' },
+            'confirm-name': { type: 'string' },
+          });
+          const id = positionals[0];
+          if (!id) throw new CliError('subject delete requires <subject-id>', EXIT_USAGE, 'USAGE');
+          await subjectDelete(ctx, {
+            id,
+            force: values.force === true,
+            ...(typeof values['confirm-name'] === 'string'
+              ? { confirmName: values['confirm-name'] }
+              : {}),
+          });
         } else if (sub === 'use') {
           const id = positionals[0];
           const clear = values.clear === true;

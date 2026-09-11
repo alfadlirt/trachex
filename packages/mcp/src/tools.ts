@@ -2,6 +2,7 @@ import { type RunAgentFn, runReconciliation } from '@trachex/agent';
 import {
   approveProposal,
   buildExportSummary,
+  buildSubjectBaseline,
   checkRequirement,
   createTicket,
   NotFoundError,
@@ -102,6 +103,19 @@ export const tools: ToolDef[] = [
         ...summary,
         openProposals: proposals.filter((p) => p.status === 'pending'),
       };
+    },
+  },
+  {
+    name: 'get_subject_baseline',
+    description: 'Get the structured subject context pack for a coding agent.',
+    inputSchema: z.object({ subjectId: z.string().min(1) }),
+    handler: async (ctx, input) => {
+      const { subjectId } = input as { subjectId: string };
+      const subject = await ctx.uow.subjects.findById(subjectId);
+      if (!subject) throw new NotFoundError('subject', subjectId);
+      if (subject.projectId !== ctx.projectId)
+        throw new ScopingError('subject does not belong to the selected project');
+      return buildSubjectBaseline(ctx.uow, subjectId);
     },
   },
   {

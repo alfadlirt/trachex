@@ -100,3 +100,85 @@ Connection manager (`src/connection.ts`):
   FTS5 is the default adapter; Qdrant is derived and rebuilt per-chunk with the
   same chunk ids (`rebuildQdrantFromSnapshots`). Never let Qdrant become the
   canonical store (ADR 001).
+
+## Evidence References & Baselines (Phase 3)
+
+### 1. Scope / Trigger
+
+Cross-layer evidence intake and coding-agent context require a persisted,
+subject-scoped reference that can be read by the domain, SQLite adapter, TUI,
+and MCP without exposing provider details or making retrieval indexes
+canonical.
+
+### 2. Signatures
+
+- Domain repository: `evidenceReferences.create(reference)` and
+  `evidenceReferences.listBySubject(subjectId)`.
+- SQLite table: `evidence_references` stores `id`, `subject_id`, `source_id`,
+  `source_type`, `attribution`, `location`, `excerpt`, `retrieval_metadata`,
+  `repository_scope`, and `created_at`.
+- Baseline projection: `buildSubjectBaseline(subjectId, projectId)` returns
+  the scoped checklist, active/history records, sources, evidence references,
+  repository scope, pending proposals, impacts, scenarios, open questions, and
+  review findings.
+- MCP read tool: `get_subject_baseline` accepts a subject identifier and
+  project scope, then returns the structured baseline without mutation tools.
+
+### 3. Contracts
+
+- Evidence references are append-only provenance records. `source_id` points
+  to the canonical source when available; URL content is represented by its
+  fetched snapshot metadata, not by a live URL lookup.
+- `repository_scope` is the selected repository scope at intake time and must
+  not be inferred from the caller's current working directory.
+- Baseline responses are read-only projections. They may include archived and
+  superseded history, but must distinguish it from active checklist state.
+- MCP handlers enforce project ownership before returning a baseline and use
+  the existing structured tool-result/error envelope.
+
+### 4. Validation & Error Matrix
+
+| Condition | Result |
+| --- | --- |
+| Subject is missing | `NOT_FOUND` domain/MCP error |
+| Subject belongs to another project | `SCOPING` error |
+| Evidence reference has no subject | reject before persistence |
+| URL evidence has no fetch/snapshot metadata | reject as incomplete provenance |
+| Baseline read | no canonical mutation |
+
+### 5. Good/Base/Bad Cases
+
+- Good: persist the fetched URL snapshot status and retrieval timestamp, then
+  cite the evidence reference from the baseline.
+- Base: persist a note or local-file reference with its attribution and
+  location, even when no source row exists yet.
+- Bad: store only a live URL or return evidence from a subject selected without
+  validating its project ownership.
+
+### 6. Tests Required
+
+- Migration/integration test asserts the evidence-reference table is created
+  and survives a write/read round trip.
+- Repository test asserts `listBySubject` does not return another subject's
+  references.
+- MCP test asserts baseline registration, project scoping, and read-only
+  response shape.
+- Baseline test asserts active checklist, history, evidence, and repository
+  scope remain separate fields.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```typescript
+return fetch(reference.location);
+```
+
+#### Correct
+
+```typescript
+return evidenceReferences.listBySubject(subjectId);
+```
+
+The correct path reads the persisted snapshot/provenance record and keeps the
+baseline deterministic, auditable, and independent of a live remote resource.

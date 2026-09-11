@@ -9,8 +9,9 @@ export type SourceType =
   | 'uat'
   | 'manual'
   | 'context';
+export type IntakeSourceType = SourceType | 'url' | 'note' | 'file';
 
-export type RequirementLifecycleStatus = 'active' | 'superseded';
+export type RequirementLifecycleStatus = 'active' | 'superseded' | 'archived';
 export type RequirementDevStatus = 'unchecked' | 'checked';
 export type ImpactKind = 'service' | 'api' | 'page';
 export type RelationshipType = 'supersedes';
@@ -26,6 +27,7 @@ export interface Project {
   description: string | null;
   createdAt: IsoDateTime;
   updatedAt: IsoDateTime;
+  lifecycleStatus?: 'active' | 'archived';
 }
 
 export interface Repository {
@@ -66,6 +68,41 @@ export interface Subject {
   description: string | null;
   createdAt: IsoDateTime;
   updatedAt: IsoDateTime;
+  lifecycleStatus?: 'active' | 'archived';
+}
+
+export interface ReviewFinding {
+  id: string;
+  subjectId: string;
+  kind: 'report' | 'proposal';
+  severity: 'info' | 'low' | 'medium' | 'high' | 'critical';
+  confidence: number;
+  summary: string;
+  evidence: string[];
+  affectedRequirementId: string | null;
+  affectedRepositoryId: string | null;
+  suggestedAction: string | null;
+  status: 'pending' | 'accepted' | 'rejected';
+  runId: string;
+  createdAt: IsoDateTime;
+}
+
+export interface AgentRun {
+  id: string;
+  subjectId: string;
+  kind: 'assistant' | 'extraction' | 'review';
+  metadata: string;
+  createdAt: IsoDateTime;
+}
+
+export interface EvidenceReference {
+  id: string;
+  subjectId: string;
+  sourceId: string | null;
+  chunkId: string | null;
+  excerpt: string;
+  retrievalMetadata: string;
+  createdAt: IsoDateTime;
 }
 
 export interface Snapshot {

@@ -1,9 +1,11 @@
 import type {
+  AgentRun,
   ChatMessage,
   ChatSession,
   Chunk,
   CompletionAudit,
   ErrorRecord,
+  EvidenceReference,
   ExportArtifact,
   Impact,
   Project,
@@ -13,6 +15,7 @@ import type {
   RepositoryPath,
   Requirement,
   RequirementRelationship,
+  ReviewFinding,
   Scenario,
   Snapshot,
   Source,
@@ -22,10 +25,12 @@ import type {
 
 export interface ProjectRepository {
   create(project: Project): Promise<Project>;
-  findBySlug(slug: string): Promise<Project | null>;
+  findBySlug(slug: string, includeArchived?: boolean): Promise<Project | null>;
   findById(id: string): Promise<Project | null>;
-  list(): Promise<Project[]>;
+  list(includeArchived?: boolean): Promise<Project[]>;
   update(project: Project): Promise<Project>;
+  archive?(id: string): Promise<void>;
+  permanentDelete?(id: string, force: boolean): Promise<void>;
 }
 
 export interface RepositoryRepository {
@@ -54,8 +59,10 @@ export interface SubjectRepository {
   create(subject: Subject): Promise<Subject>;
   findById(id: string): Promise<Subject | null>;
   findByProjectAndName(projectId: string, name: string): Promise<Subject | null>;
-  listByProject(projectId: string): Promise<Subject[]>;
+  listByProject(projectId: string, includeArchived?: boolean): Promise<Subject[]>;
   update(subject: Subject): Promise<Subject>;
+  archive?(id: string): Promise<void>;
+  permanentDelete?(id: string, force: boolean): Promise<void>;
 }
 
 export interface SnapshotRepository {
@@ -83,7 +90,9 @@ export interface RequirementRepository {
   listByTicket(ticketId: string): Promise<Requirement[]>;
   listActiveByTicket(ticketId: string): Promise<Requirement[]>;
   listSupersededByTicket(ticketId: string): Promise<Requirement[]>;
+  listArchivedByTicket?(ticketId: string): Promise<Requirement[]>;
   update(requirement: Requirement): Promise<Requirement>;
+  archiveSubtree?(id: string): Promise<void>;
   addRelationship(relationship: RequirementRelationship): Promise<RequirementRelationship>;
   listRelationshipsByTicket(ticketId: string): Promise<RequirementRelationship[]>;
   addImpact(impact: Impact): Promise<Impact>;
@@ -121,6 +130,16 @@ export interface ExportRepository {
   listByProject(projectId: string): Promise<ExportArtifact[]>;
 }
 
+export interface AgentRepository {
+  createRun(run: AgentRun): Promise<AgentRun>;
+  listRuns(subjectId: string): Promise<AgentRun[]>;
+  createFinding(finding: ReviewFinding): Promise<ReviewFinding>;
+  listFindings(subjectId: string): Promise<ReviewFinding[]>;
+  updateFinding(finding: ReviewFinding): Promise<ReviewFinding>;
+  createEvidenceReference(reference: EvidenceReference): Promise<EvidenceReference>;
+  listEvidenceReferences(subjectId: string): Promise<EvidenceReference[]>;
+}
+
 export interface SearchRepository {
   search(query: string, projectId: string, limit?: number): Promise<SearchResult[]>;
 }
@@ -149,4 +168,5 @@ export interface UnitOfWork {
   sessions: SessionRepository;
   exports: ExportRepository;
   search: SearchRepository;
+  agents?: AgentRepository;
 }

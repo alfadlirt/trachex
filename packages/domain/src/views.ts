@@ -162,6 +162,7 @@ export interface ChecklistView {
   groups: ChecklistGroup[];
   tree: ChecklistTree[];
   superseded: SupersededEntry[];
+  archived: ChecklistItem[];
 }
 
 export async function buildChecklistView(
@@ -229,6 +230,7 @@ export async function buildChecklistView(
     item: toItem(requirement),
     supersededByTitle: supersededByTitle.get(requirement.id) ?? null,
   }));
+  const archived = ((await uow.requirements.listArchivedByTicket?.(ticket.id)) ?? []).map(toItem);
 
   return {
     ticketKey: ticket.key,
@@ -236,5 +238,6 @@ export async function buildChecklistView(
     groups: [...groups.entries()].map(([label, items]) => ({ label, items })),
     tree: buildChecklistTree(active.map(toItem)),
     superseded,
+    archived,
   };
 }

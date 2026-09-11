@@ -18,6 +18,7 @@ import {
   importProjectArchive,
   migrate,
   openDatabase,
+  SCHEMA_VERSION,
   SqliteUnitOfWork,
 } from './index.ts';
 
@@ -69,9 +70,9 @@ test('migrations apply idempotently and set pragmas', () => {
   const dir = tempDir();
   try {
     const db = openDb(dir);
-    assert.equal(currentSchemaVersion(db), 6);
+    assert.equal(currentSchemaVersion(db), SCHEMA_VERSION);
     migrate(db);
-    assert.equal(currentSchemaVersion(db), 6);
+    assert.equal(currentSchemaVersion(db), SCHEMA_VERSION);
     const journal = db.pragma('journal_mode', { simple: true }) as unknown as string;
     assert.equal(journal, 'wal');
     const fk = db.pragma('foreign_keys', { simple: true }) as unknown as number;

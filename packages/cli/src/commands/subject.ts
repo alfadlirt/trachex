@@ -1,4 +1,10 @@
-import { createSubject, NotFoundError, type Subject, type UnitOfWork } from '@trachex/domain';
+import {
+  createSubject,
+  NotFoundError,
+  permanentlyDeleteSubject,
+  type Subject,
+  type UnitOfWork,
+} from '@trachex/domain';
 import type { AppContext } from '../app.ts';
 import { readGlobalConfig, writeGlobalConfig } from '../context.ts';
 import { CliError } from '../errors.ts';
@@ -55,6 +61,24 @@ export async function subjectShow(uow: UnitOfWork, args: { id: string; json: boo
   if (subject.description) {
     print(`description: ${subject.description}`);
   }
+}
+
+export async function subjectDelete(
+  ctx: AppContext,
+  args: { id: string; force: boolean; confirmName?: string },
+) {
+  const subject = await ctx.uow.subjects.findById(args.id);
+  if (!subject) throw new NotFoundError('subject', args.id);
+  if (!args.force) throw new CliError('permanent subject deletion requires --force', 2, 'USAGE');
+  if (args.confirmName !== subject.name) {
+    throw new CliError(
+      'permanent subject deletion requires --confirm-name <exact subject name>',
+      2,
+      'USAGE',
+    );
+  }
+  await permanentlyDeleteSubject(ctx.uow, subject.id, true);
+  print(`Subject permanently deleted: ${subject.name}`);
 }
 
 export async function subjectUse(

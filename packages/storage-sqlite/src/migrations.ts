@@ -4,7 +4,7 @@ export interface Migration {
   sql: string;
 }
 
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 8;
 
 export const migrations: Migration[] = [
   {
@@ -288,6 +288,26 @@ CREATE TABLE subject_repositories (
   PRIMARY KEY (subject_id, repository_id)
 );
 CREATE INDEX idx_subject_repositories_repo ON subject_repositories(repository_id);
+`,
+  },
+  {
+    version: 7,
+    name: 'lifecycle-agent-activity',
+    sql: `
+ALTER TABLE projects ADD COLUMN lifecycle_status TEXT NOT NULL DEFAULT 'active';
+ALTER TABLE subjects ADD COLUMN lifecycle_status TEXT NOT NULL DEFAULT 'active';
+CREATE TABLE agent_runs (id TEXT PRIMARY KEY, subject_id TEXT NOT NULL REFERENCES subjects(id), kind TEXT NOT NULL, metadata TEXT NOT NULL, created_at TEXT NOT NULL);
+CREATE TABLE review_findings (id TEXT PRIMARY KEY, subject_id TEXT NOT NULL REFERENCES subjects(id), kind TEXT NOT NULL, severity TEXT NOT NULL, confidence REAL NOT NULL, summary TEXT NOT NULL, evidence TEXT NOT NULL, affected_requirement_id TEXT, affected_repository_id TEXT, suggested_action TEXT, status TEXT NOT NULL DEFAULT 'pending', run_id TEXT NOT NULL REFERENCES agent_runs(id), created_at TEXT NOT NULL);
+CREATE INDEX idx_agent_runs_subject ON agent_runs(subject_id);
+CREATE INDEX idx_review_findings_subject ON review_findings(subject_id);
+`,
+  },
+  {
+    version: 8,
+    name: 'evidence-references',
+    sql: `
+CREATE TABLE evidence_references (id TEXT PRIMARY KEY, subject_id TEXT NOT NULL REFERENCES subjects(id), source_id TEXT REFERENCES sources(id), chunk_id TEXT, excerpt TEXT NOT NULL, retrieval_metadata TEXT NOT NULL, created_at TEXT NOT NULL);
+CREATE INDEX idx_evidence_references_subject ON evidence_references(subject_id);
 `,
   },
 ];
