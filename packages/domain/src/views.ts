@@ -1,4 +1,4 @@
-import type { Impact, Requirement, Scenario, Source } from './entities.ts';
+import type { CompletionAudit, Impact, Requirement, Scenario, Source } from './entities.ts';
 import { NotFoundError } from './errors.ts';
 import type { UnitOfWork } from './repositories.ts';
 
@@ -102,10 +102,15 @@ export interface ChecklistItem {
   title: string;
   description: string | null;
   devStatus: Requirement['devStatus'];
+  lifecycleStatus: Requirement['lifecycleStatus'];
   parentLabel: string | null;
   parentId: string | null;
   displayOrder: number;
-  source: Pick<Source, 'type' | 'attribution' | 'location'> | null;
+  source: Pick<
+    Source,
+    'type' | 'attribution' | 'location' | 'note' | 'sourceEventAt' | 'ingestedAt'
+  > | null;
+  audits: CompletionAudit[];
   impacts: Pick<Impact, 'kind' | 'value'>[];
   scenarios: Pick<Scenario, 'text'>[];
 }
@@ -153,7 +158,10 @@ export interface ChecklistGroup {
 
 export interface SupersededEntry {
   item: ChecklistItem;
+  supersededById: string | null;
   supersededByTitle: string | null;
+  replacement: ChecklistItem | null;
+  oldAudits: CompletionAudit[];
 }
 
 export interface ChecklistView {
@@ -191,12 +199,21 @@ export async function buildChecklistView(
       title: requirement.title,
       description: requirement.description,
       devStatus: requirement.devStatus,
+      lifecycleStatus: requirement.lifecycleStatus,
       parentLabel: requirement.parentLabel,
       parentId: requirement.parentId,
       displayOrder: requirement.displayOrder,
       source: source
-        ? { type: source.type, attribution: source.attribution, location: source.location }
+        ? {
+            type: source.type,
+            attribution: source.attribution,
+            location: source.location,
+            note: source.note,
+            sourceEventAt: source.sourceEventAt,
+            ingestedAt: source.ingestedAt,
+          }
         : null,
+      audits: [],
       impacts: impacts
         .filter((i) => i.requirementId === requirement.id)
         .map((i) => ({ kind: i.kind, value: i.value })),
@@ -226,10 +243,32 @@ export async function buildChecklistView(
       }
     }
   }
-  const superseded = supersededRequirements.map((requirement) => ({
-    item: toItem(requirement),
-    supersededByTitle: supersededByTitle.get(requirement.id) ?? null,
-  }));
+  const replacementByOldId = new Map<string, Requirement>();
+  const replacementIdByOldId = new Map<string, string>();
+  for (const rel of relationships) {
+    if (rel.type !== 'supersedes') continue;
+    const replacement = active.find((r) => r.id === rel.fromRequirementId);
+    if (replacement) {
+      replacementByOldId.set(rel.toRequirementId, replacement);
+      replacementIdByOldId.set(rel.toRequirementId, replacement.id);
+    }
+  }
+  const withAudits = async (requirement: Requirement): Promise<ChecklistItem> => ({
+    ...toItem(requirement),
+    audits: await uow.completionAudits.listByRequirement(requirement.id),
+  });
+  const superseded = await Promise.all(
+    supersededRequirements.map(async (requirement) => {
+      const replacement = replacementByOldId.get(requirement.id) ?? null;
+      return {
+        item: await withAudits(requirement),
+        supersededById: replacementIdByOldId.get(requirement.id) ?? null,
+        supersededByTitle: supersededByTitle.get(requirement.id) ?? null,
+        replacement: replacement ? await withAudits(replacement) : null,
+        oldAudits: await uow.completionAudits.listByRequirement(requirement.id),
+      };
+    }),
+  );
   const archived = ((await uow.requirements.listArchivedByTicket?.(ticket.id)) ?? []).map(toItem);
 
   return {

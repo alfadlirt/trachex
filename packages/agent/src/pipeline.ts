@@ -34,6 +34,7 @@ export interface PipelineInput {
   content: string;
   sourceEventAt?: string;
   location?: string;
+  note?: string;
 }
 
 export async function runExtraction(uow: UnitOfWork, deps: PipelineDeps, input: PipelineInput) {
@@ -45,6 +46,7 @@ export async function runExtraction(uow: UnitOfWork, deps: PipelineDeps, input: 
     ...(input.attribution !== undefined ? { attribution: input.attribution } : {}),
     ...(input.sourceEventAt !== undefined ? { sourceEventAt: input.sourceEventAt } : {}),
     ...(input.location !== undefined ? { location: input.location } : {}),
+    ...(input.note !== undefined ? { note: input.note } : {}),
     relPath: input.relPath,
     contentKind: input.contentKind,
     content: input.content,
@@ -83,6 +85,7 @@ export async function runReconciliation(uow: UnitOfWork, deps: PipelineDeps, inp
     ...(input.attribution !== undefined ? { attribution: input.attribution } : {}),
     ...(input.sourceEventAt !== undefined ? { sourceEventAt: input.sourceEventAt } : {}),
     ...(input.location !== undefined ? { location: input.location } : {}),
+    ...(input.note !== undefined ? { note: input.note } : {}),
     relPath: input.relPath,
     contentKind: input.contentKind,
     content: input.content,

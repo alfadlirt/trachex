@@ -135,45 +135,87 @@ pnpm run trachex status \
   --json
 ```
 
-## 9. Add A Clarification Adjustment
+## 9. Add A Clarification Adjustment (Deterministic Primary Path)
+
+The adjustment is on the single `Checkout`/`BILL-101` ticket. Free-text notes
+do not force an agent to emit `supersedes`, so use the provider-free fixture.
 
 ```bash
+OLD_ID=$(pnpm run trachex subject checklist "Checkout" --project subscription-billing --json \
+  | jq -r '.groups[].items[] | select(.title == "Start a seven-day free trial") | .id')
+test -n "$OLD_ID" && test "$OLD_ID" != "null"
+jq --arg target "$OLD_ID" '.create[0].supersedes = [$target]' \
+  fixtures/subscription-billing-adjustment/reconciliation-clarification.json \
+  > /tmp/trachex-clarification-reconciliation.json
 pnpm run trachex adjustment "Checkout" \
   --project subscription-billing \
   --source clarification \
   --from "Maya Chen, Product Manager" \
-  --note "Trial conversion must use the account timezone. Add a 24-hour grace period for failed payment retries. The previous requirement did not cover timezone boundaries or cancellation during the grace period."
+  --note "Trial conversion must use the account timezone. Add a 24-hour grace period for failed payment retries. The previous requirement did not cover timezone boundaries or cancellation during the grace period." \
+  --fixture /tmp/trachex-clarification-reconciliation.json
 ```
 
-List proposals again:
+Assert the pending proposal JSON before approving:
 
 ```bash
-pnpm run trachex proposal list \
-  --project subscription-billing
+PROPOSAL_ID=$(pnpm run trachex proposal list --project subscription-billing \
+  | jq -r '[.[] | select(.proposal.kind == "reconciliation" and .proposal.status == "pending")][-1].proposal.id')
+pnpm run trachex proposal list --project subscription-billing \
+  | jq --arg id "$PROPOSAL_ID" '.[] | select(.proposal.id == $id) | .versions[-1].editedOutput | fromjson | {kind, supersedes: [.create[].supersedes[]]}'
 ```
 
-Approve the newest reconciliation proposal:
+Expected output includes `{"kind":"reconciliation","supersedes":["<OLD_ID>"]}`.
+Approve only after that assertion passes:
 
 ```bash
-pnpm run trachex proposal approve <copy-clarification-proposal-id> \
+pnpm run trachex proposal approve "$PROPOSAL_ID" \
   --project subscription-billing \
   --yes
 ```
 
-## 10. Verify Requirement History
+## 10. Assert Superseded Requirement History
 
 ```bash
 pnpm run trachex subject checklist "Checkout" \
   --project subscription-billing \
-  --json
+  --json > /tmp/trachex-checklist-after-clarification.json
+jq -e --arg old "$OLD_ID" '
+  (.superseded | length) == 1 and .[0].item.id == $old and
+  .[0].item.lifecycleStatus == "superseded" and
+  .[0].supersededByTitle == "Convert at the end of the local seventh day" and
+  .[0].replacement.source.type == "clarification" and
+  .[0].replacement.source.attribution == "Maya Chen, Product Manager" and
+  .[0].replacement.source.location != null and .[0].replacement.source.note != null and
+  .[0].replacement.source.ingestedAt != null and
+  .[0].replacement.devStatus == "unchecked"
+' /tmp/trachex-checklist-after-clarification.json
 ```
 
-Verify that:
+Expected result is `true`. Also check the JSON fields `lifecycleStatus`,
+`supersededByTitle`, `oldAudits`, and `replacement.source` (type, attribution,
+location, and note). The replacement must be active/unchecked and unrelated
+completed items must remain checked.
 
-- The old requirement is superseded, not deleted.
-- The replacement requirement is active.
-- The replacement requirement is unchecked.
-- Unrelated completed items remain checked.
+### Repair branch: missing `supersedes`
+
+If `.superseded` is empty, do not approve. Inspect the proposal output, then
+rerun the deterministic fixture with an explicit replacement note (or use a
+proposal editor, if one is available, to set `create[0].supersedes` to
+`$OLD_ID`). Refresh `PROPOSAL_ID`, rerun the assertion, then approve:
+
+```bash
+pnpm run trachex proposal list --project subscription-billing \
+  | jq --arg id "$PROPOSAL_ID" '.[] | select(.proposal.id == $id) | .versions[-1]'
+pnpm run trachex adjustment "Checkout" --project subscription-billing \
+  --source clarification --from "Maya Chen, Product Manager" \
+  --note "Explicit replacement: supersede requirement $OLD_ID (Start a seven-day free trial) with local seventh-day conversion; add a 24-hour grace period." \
+  --fixture /tmp/trachex-clarification-reconciliation.json
+PROPOSAL_ID=$(pnpm run trachex proposal list --project subscription-billing \
+  | jq -r '[.[] | select(.proposal.kind == "reconciliation" and .proposal.status == "pending")][-1].proposal.id')
+```
+
+Approve the repaired pending proposal only after its JSON contains
+`supersedes: ["$OLD_ID"]`. Repeat step 10; it must show `# Superseded`.
 
 ## 11. Add UAT Feedback
 
@@ -182,10 +224,11 @@ pnpm run trachex adjustment "Checkout" \
   --project subscription-billing \
   --source uat \
   --from "UAT Team" \
-  --note "At the user's local midnight, trial conversion can select the wrong billing date. Failed payment retry behavior may create duplicate charges. Add coverage for timezone boundaries, retry idempotency, and cancellation during the grace period."
+  --note "At the user's local midnight, trial conversion can select the wrong billing date. Failed payment retry behavior may create duplicate charges. Add coverage for timezone boundaries, retry idempotency, and cancellation during the grace period." \
+  --fixture fixtures/subscription-billing-adjustment/reconciliation-uat.json
 ```
 
-Review and approve the new proposal:
+Review and assert the new proposal, then approve:
 
 ```bash
 pnpm run trachex proposal list \
@@ -193,12 +236,16 @@ pnpm run trachex proposal list \
 ```
 
 ```bash
-pnpm run trachex proposal approve <copy-uat-proposal-id> \
+PROPOSAL_ID=$(pnpm run trachex proposal list --project subscription-billing \
+  | jq -r '[.[] | select(.proposal.kind == "reconciliation" and .proposal.status == "pending")][-1].proposal.id')
+pnpm run trachex proposal list --project subscription-billing \
+  | jq -e --arg id "$PROPOSAL_ID" '.[] | select(.proposal.id == $id) | .versions[-1].editedOutput | fromjson | (.kind == "reconciliation" and (.create | length) == 2)'
+pnpm run trachex proposal approve "$PROPOSAL_ID" \
   --project subscription-billing \
   --yes
 ```
 
-## 12. Review Final Progress
+## 12. Review Final Progress And Drift Counts
 
 ```bash
 pnpm run trachex status \
@@ -215,6 +262,19 @@ pnpm run trachex subject show checkout \
 pnpm run trachex subject checklist checkout \
   --project subscription-billing
 ```
+
+Final timeline assertion: **2 initial requirements; 4 additions (2
+clarification + 2 UAT); 1 superseded; 5 active; 4 active/unchecked**. The
+replacement chain is `Start a seven-day free trial` → `Convert at the end of
+the local seventh day`, with clarification source/author/date evidence. The
+single-ticket checklist is the source of truth; there is no three-ticket
+history to reconcile.
+
+For every drift question, distinguish stored checklist, relationship, source,
+and audit evidence from inference. If any required evidence is missing or
+contradictory, use this exact response:
+
+> We can't confirm that from the available context. Please ask your BA immediately, then add the clarification with `subject add-doc` before relying on this answer.
 
 ## 13. Export The Development Summary
 

@@ -1,0 +1,31 @@
+{
+  "id": "supersede-cause-visibility",
+  "name": "supersede-cause-visibility",
+  "title": "Supersede cause visibility for mid-development adjustments",
+  "description": "Superseded checklist items show cause: what changed, source, attribution, replacement, and stale work",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "alfa",
+  "assignee": "alfa",
+  "createdAt": "2026-09-12",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "09-12-supersede-eval",
+    "09-12-supersede-model",
+    "09-12-supersede-rendering",
+    "09-12-supersede-runbook"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

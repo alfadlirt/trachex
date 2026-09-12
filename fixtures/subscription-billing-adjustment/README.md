@@ -2,8 +2,11 @@
 
 This deterministic fixture models a subscription billing portal as work moves
 from the original feature to clarification and UAT. Primary project:
-**Subscription Billing Portal** (`project-subscription-billing`). Primary ticket:
-**BILL-101**, adjusted by **BILL-118**, with UAT feedback in **BILL-127**.
+**Subscription Billing Portal** (`project-subscription-billing`). The complete
+story is one subject/ticket: **BILL-101**. Clarification and UAT are source
+records on that ticket, not separate adjustment tickets. The other ticket rows
+in `project.json` are retained only as historical fixture data and are not part
+of the Checkout checklist.
 
 ## Timeline and expected state
 
@@ -13,7 +16,8 @@ from the original feature to clarification and UAT. Primary project:
 3. On 2025-01-28, clarification changes conversion to the customer's local
    seventh day and adds a grace period. The original trial requirement remains
    in history as `superseded`; it is not overwritten.
-4. On 2025-02-12, UAT adds timezone display and idempotent webhook requirements.
+4. On 2025-02-12, UAT adds timezone display and idempotent webhook requirements
+   to the same BILL-101 checklist.
 
 The current active checklist has five items: one checked payment-method item
 and four unchecked adjustment/UAT items. The superseded trial item remains

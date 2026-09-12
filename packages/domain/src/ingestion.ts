@@ -11,6 +11,7 @@ export interface IngestSourceInput {
   attribution?: string;
   sourceEventAt?: string;
   location?: string;
+  note?: string;
   relPath: string;
   contentKind: string;
   content: string;
@@ -81,7 +82,7 @@ export async function ingestSource(
     ingestedAt: now,
     snapshotId: snapshot.id,
     location: input.location?.trim() || null,
-    note: null,
+    note: input.note?.trim() || null,
   };
   await uow.sources.create(source);
 

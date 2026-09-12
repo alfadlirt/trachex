@@ -12,24 +12,24 @@
   },
   {
     "id": "source-clarification-trial",
-    "ticketId": "ticket-trial-adjustment",
+    "ticketId": "ticket-billing-checkout",
     "type": "clarification",
     "attribution": "Owen Brooks, Product",
     "sourceEventAt": "2025-01-28T14:15:00.000Z",
     "ingestedAt": "2025-01-28T15:00:00.000Z",
     "location": "documents/clarification.md#conversion",
     "snapshotId": null,
-    "note": null
+    "note": "Clarification from Product: conversion uses the account timezone and failed payment retries have a 24-hour grace period."
   },
   {
     "id": "source-uat-feedback",
-    "ticketId": "ticket-uat-feedback",
+    "ticketId": "ticket-billing-checkout",
     "type": "uat",
     "attribution": "Priya Nair, QA",
     "sourceEventAt": "2025-02-12T13:20:00.000Z",
     "ingestedAt": "2025-02-12T14:00:00.000Z",
     "location": "documents/uat-feedback.md#findings",
     "snapshotId": null,
-    "note": null
+    "note": "UAT found timezone-boundary, retry-idempotency, and cancellation-during-grace-period coverage gaps."
   }
 ]

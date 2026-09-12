@@ -34,7 +34,7 @@
   {
     "id": "req-convert-day-seven",
     "projectId": "project-subscription-billing",
-    "ticketId": "ticket-trial-adjustment",
+    "ticketId": "ticket-billing-checkout",
     "title": "Convert at the end of the local seventh day",
     "description": "The first charge occurs at the end of the customer's local seventh calendar day, not seven elapsed UTC days.",
     "sourceId": "source-clarification-trial",
@@ -50,7 +50,7 @@
   {
     "id": "req-grace-period",
     "projectId": "project-subscription-billing",
-    "ticketId": "ticket-trial-adjustment",
+    "ticketId": "ticket-billing-checkout",
     "title": "Allow a 24-hour payment grace period",
     "description": "Keep the subscription in grace period after a failed conversion charge and retry once.",
     "sourceId": "source-clarification-trial",
@@ -66,7 +66,7 @@
   {
     "id": "req-idempotent-charge-retry",
     "projectId": "project-subscription-billing",
-    "ticketId": "ticket-uat-feedback",
+    "ticketId": "ticket-billing-checkout",
     "title": "Make conversion retries idempotent",
     "description": "A retry or duplicated webhook must never create a second charge.",
     "sourceId": "source-uat-feedback",
@@ -82,7 +82,7 @@
   {
     "id": "req-invoice-timezone-display",
     "projectId": "project-subscription-billing",
-    "ticketId": "ticket-uat-feedback",
+    "ticketId": "ticket-billing-checkout",
     "title": "Show the conversion date in the customer timezone",
     "description": "Invoice and account history should use the timezone captured at checkout.",
     "sourceId": "source-uat-feedback",

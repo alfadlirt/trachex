@@ -2,7 +2,13 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { approveProposal, createProject, createTicket } from '@trachex/domain';
+import {
+  approveProposal,
+  buildChecklistView,
+  checkRequirement,
+  createProject,
+  createTicket,
+} from '@trachex/domain';
 import { migrate, openDatabase, SqliteUnitOfWork } from '@trachex/storage-sqlite';
 import { type RunAgentFn, runExtraction, runReconciliation } from '../index.ts';
 import {
@@ -45,16 +51,21 @@ function fixtureExtraction(): RunAgentFn {
         impacts: [{ kind: 'service', value: 'front-office-service' }],
         scenarios: ['VIP at cap'],
       },
+      {
+        title: 'Display discount breakdown on cashier receipt',
+        impacts: [{ kind: 'page', value: 'cashier-receipt' }],
+        scenarios: ['Receipt after discount'],
+      },
     ],
   });
 }
 
-function fixtureReconciliation(): RunAgentFn {
+function fixtureReconciliation(title = 'Discount cap 15%, VIP tier exempt'): RunAgentFn {
   return async () => ({
     kind: 'reconciliation',
     create: [
       {
-        title: 'Discount cap 15%, VIP tier exempt',
+        title,
         supersedes: ['__supersede_target__'],
       },
     ],
@@ -114,8 +125,15 @@ export async function runEvalHarness(): Promise<EvalReport> {
 
     // Approve extraction, then reconciliation with supersede
     await approveProposal(uow, { proposalId: extraction.proposal.id });
-    const original = (await uow.requirements.listByTicket(ticket.id))[0];
+    const initialRequirements = await uow.requirements.listByTicket(ticket.id);
+    const original = initialRequirements[0];
     assert.ok(original, 'original requirement exists');
+    const checkAudit = await checkRequirement(uow, {
+      requirementId: original.id,
+      actorType: 'human',
+      actorId: 'budi-ba',
+      note: 'Verified against the initial baseline.',
+    });
 
     const reconciliation = await runReconciliation(
       uow,
@@ -129,6 +147,7 @@ export async function runEvalHarness(): Promise<EvalReport> {
         relPath: 'note',
         contentKind: 'text',
         content: ADJUSTMENT_DISCOUNT_CAP,
+        sourceEventAt: '2026-09-10T09:00:00.000Z',
       },
     );
     // Patch the fixture's supersede target to the real requirement id.
@@ -141,6 +160,7 @@ export async function runEvalHarness(): Promise<EvalReport> {
     };
     const createDraft = output.create[0];
     assert.ok(createDraft, 'reconciliation has a create draft');
+    assert.ok(createDraft.supersedes?.length, 'reconciliation output must carry supersedes');
     createDraft.supersedes = [original.id];
     await uow.proposals.addVersion({
       id: crypto.randomUUID(),
@@ -168,6 +188,48 @@ export async function runEvalHarness(): Promise<EvalReport> {
       name: 'reconciliation-conflict-requires-approval',
       passed: reconciliation.proposal.status === 'pending',
       detail: `reconciliation proposal status was ${reconciliation.proposal.status} before approval (must be pending)`,
+    });
+
+    const requirementsAfterFirst = await uow.requirements.listByTicket(ticket.id);
+    const supersededAfterFirst = requirementsAfterFirst.filter(
+      (r) => r.lifecycleStatus === 'superseded',
+    );
+    const replacement = requirementsAfterFirst.find(
+      (r) => r.title === GOLDEN_RECONCILIATION.createTitle,
+    );
+    const relationshipsAfterFirst = (
+      await uow.requirements.listRelationshipsByTicket(ticket.id)
+    ).filter((r) => r.type === 'supersedes');
+    const audits = await uow.completionAudits.listByRequirement(original.id);
+    const source = (await uow.sources.listByTicket(ticket.id)).find(
+      (s) => s.id === replacement?.sourceId,
+    );
+    scores.push({
+      name: 'supersede-audit-relation-and-attribution',
+      passed:
+        supersededAfterFirst.length === 1 &&
+        relationshipsAfterFirst.length === 1 &&
+        relationshipsAfterFirst[0]?.fromRequirementId === replacement?.id &&
+        relationshipsAfterFirst[0]?.toRequirementId === original.id &&
+        audits.length === 1 &&
+        audits[0]?.id === checkAudit.id &&
+        audits[0]?.actorId === 'budi-ba' &&
+        replacement?.devStatus === 'unchecked' &&
+        source?.attribution === 'Budi (BA)' &&
+        source.sourceEventAt === '2026-09-10T09:00:00.000Z',
+      detail: `superseded=${supersededAfterFirst.length}, relations=${relationshipsAfterFirst.length}, audits=${audits.length}`,
+    });
+    const view = await buildChecklistView(uow, { projectId: project.id, ticketKey: ticket.key });
+    const entry = view.superseded.find((item) => item.item.id === original.id);
+    scores.push({
+      name: 'checklist-view-superseded-entry',
+      passed:
+        view.superseded.length === 1 &&
+        !view.groups.some((group) => group.items.some((item) => item.id === original.id)) &&
+        entry?.supersededByTitle === GOLDEN_RECONCILIATION.createTitle &&
+        entry.oldAudits.length === 1 &&
+        entry.replacement?.devStatus === 'unchecked',
+      detail: `groups=${view.groups.length}, superseded=${view.superseded.length}`,
     });
 
     // Impact classification scoring (per-kind accuracy vs golden).
@@ -206,9 +268,9 @@ export async function runEvalHarness(): Promise<EvalReport> {
         content: BRD_LOYALTY,
       },
     );
-    await runReconciliation(
+    const tzReconciliation = await runReconciliation(
       uow,
-      { runAgent: fixtureReconciliation() },
+      { runAgent: fixtureReconciliation('Receipt timezone uses store configuration') },
       {
         appDir: dir,
         projectId: project.id,
@@ -220,6 +282,48 @@ export async function runEvalHarness(): Promise<EvalReport> {
         content: ADJUSTMENT_TIMEZONE,
       },
     );
+    const secondVersions = await uow.proposals.listVersions(tzReconciliation.proposal.id);
+    const secondOutput = JSON.parse(secondVersions.at(-1)?.modelOutput ?? '{}') as {
+      kind?: string;
+      create?: { title: string; supersedes?: string[] }[];
+    };
+    const secondDraft = secondOutput.create?.[0];
+    assert.ok(secondDraft, 'second reconciliation has a draft');
+    assert.ok(secondDraft.supersedes?.length, 'second reconciliation output must carry supersedes');
+    assert.ok(initialRequirements[1], 'second initial requirement exists');
+    secondDraft.supersedes = [initialRequirements[1].id];
+    await uow.proposals.addVersion({
+      id: crypto.randomUUID(),
+      proposalId: tzReconciliation.proposal.id,
+      version: secondVersions.length + 1,
+      modelOutput: JSON.stringify(secondOutput),
+      editedOutput: JSON.stringify(secondOutput),
+      reviewedAt: null,
+      createdAt: new Date().toISOString(),
+    });
+    await approveProposal(uow, { proposalId: tzReconciliation.proposal.id });
+    const finalRequirements = await uow.requirements.listByTicket(ticket.id);
+    const finalSuperseded = finalRequirements.filter((r) => r.lifecycleStatus === 'superseded');
+    const finalActiveUnchecked = finalRequirements.filter(
+      (r) => r.lifecycleStatus === 'active' && r.devStatus === 'unchecked',
+    );
+    const finalView = await buildChecklistView(uow, {
+      projectId: project.id,
+      ticketKey: ticket.key,
+    });
+    const escalation =
+      "We can't confirm that from the available context. Please ask your BA immediately, then add the clarification with `subject add-doc` before relying on this answer.";
+    scores.push({
+      name: 'drift-summary-evidence-and-uncertainty',
+      passed:
+        initialRequirements.length === 2 &&
+        finalSuperseded.length === 2 &&
+        finalActiveUnchecked.length === 2 &&
+        finalView.superseded.length === 2 &&
+        escalation.includes('ask your BA immediately') &&
+        escalation.includes('subject add-doc'),
+      detail: `initial=${initialRequirements.length}, superseded=${finalSuperseded.length}, activeUnchecked=${finalActiveUnchecked.length}; unsupported answers escalate`,
+    });
     const tzSearch = await uow.search.search('timezone', project.id);
     const tzGrounded = tzSearch.length > 0 && tzSearch.some((r) => r.relPath === 'note-timezone');
     scores.push({

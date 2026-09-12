@@ -30,7 +30,7 @@
   },
   {
     "id": "proposal-reconciliation-adjustment",
-    "ticketId": "ticket-trial-adjustment",
+    "ticketId": "ticket-billing-checkout",
     "kind": "reconciliation",
     "status": "pending",
     "sourceId": "source-clarification-trial",

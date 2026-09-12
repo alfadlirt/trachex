@@ -30,6 +30,7 @@ export async function adjustment(
       ticketId: ticket.id,
       type: args.source as SourceType,
       ...(args.from !== undefined ? { attribution: args.from } : {}),
+      note: args.note,
       relPath: 'note',
       contentKind: 'text',
       content: args.note,

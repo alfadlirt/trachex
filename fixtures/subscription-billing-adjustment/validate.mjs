@@ -59,6 +59,15 @@ for (const proposal of proposals) {
     fail(`invalid proposal: ${proposal.id}`);
   if (!['pending', 'approved', 'rejected'].includes(proposal.status))
     fail(`invalid proposal status: ${proposal.id}`);
+  if (proposal.kind === 'reconciliation') {
+    const targets = proposal.output?.create?.flatMap((draft) => draft.supersedes ?? []) ?? [];
+    for (const targetId of targets) {
+      const target = requirements.find((requirement) => requirement.id === targetId);
+      if (!target) fail(`reconciliation ${proposal.id} supersedes missing requirement ${targetId}`);
+      if (target.ticketId !== proposal.ticketId)
+        fail(`reconciliation ${proposal.id} crosses ticket boundary for ${targetId}`);
+    }
+  }
 }
 for (const finding of findings)
   if (

@@ -12,6 +12,7 @@ export interface IngestFileInput {
   attribution?: string;
   sourceEventAt?: string;
   location?: string;
+  note?: string;
   relPath: string;
   contentKind: string;
   content: string;
@@ -27,6 +28,7 @@ export async function ingestFile(uow: UnitOfWork, input: IngestFileInput) {
     ...(input.attribution !== undefined ? { attribution: input.attribution } : {}),
     ...(input.sourceEventAt !== undefined ? { sourceEventAt: input.sourceEventAt } : {}),
     ...(input.location !== undefined ? { location: input.location } : {}),
+    ...(input.note !== undefined ? { note: input.note } : {}),
     relPath: input.relPath,
     contentKind: input.contentKind,
     content: input.content,

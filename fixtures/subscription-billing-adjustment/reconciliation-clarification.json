@@ -1,0 +1,22 @@
+{
+  "kind": "reconciliation",
+  "create": [
+    {
+      "title": "Convert at the end of the local seventh day",
+      "description": "Use the checkout timezone rather than elapsed UTC time.",
+      "sourceLocation": "conversion",
+      "parentLabel": "Trial conversion",
+      "supersedes": ["__supersede_target__"],
+      "impacts": [{ "kind": "service", "value": "trial-scheduler" }],
+      "scenarios": ["Local day-seven boundary crosses UTC midnight."]
+    },
+    {
+      "title": "Allow a 24-hour payment grace period",
+      "description": "Retry a failed conversion once.",
+      "sourceLocation": "grace-period",
+      "parentLabel": "Trial conversion",
+      "impacts": [{ "kind": "service", "value": "payment-retry-worker" }],
+      "scenarios": ["Failed charge enters grace period."]
+    }
+  ]
+}

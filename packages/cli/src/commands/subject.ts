@@ -1,3 +1,4 @@
+import { writeFileSync } from 'node:fs';
 import {
   buildChecklistView,
   buildExportSummary,
@@ -11,9 +12,8 @@ import {
 import type { AppContext } from '../app.ts';
 import { readGlobalConfig, writeGlobalConfig } from '../context.ts';
 import { CliError } from '../errors.ts';
-import { print, printJson } from '../io.ts';
-import { writeFileSync } from 'node:fs';
 import { serializeJson, serializeMarkdown } from '../export.ts';
+import { print, printJson } from '../io.ts';
 import { resolveSubject, resolveSubjectTicket } from '../lib/subject.ts';
 
 export async function subjectNew(
@@ -51,7 +51,10 @@ export async function subjectList(uow: UnitOfWork, args: { project: string; json
   }
 }
 
-export async function subjectShow(uow: UnitOfWork, args: { id: string; project?: string; json: boolean }) {
+export async function subjectShow(
+  uow: UnitOfWork,
+  args: { id: string; project?: string; json: boolean },
+) {
   const subject = await resolveSubject(uow, args.id, args.project);
   const project = await uow.projects.findById(subject.projectId);
   if (args.json) {
@@ -95,7 +98,22 @@ export async function subjectChecklist(
     print('# Superseded');
     for (const entry of view.superseded) {
       const by = entry.supersededByTitle ? ` (superseded by ${entry.supersededByTitle})` : '';
-      print(`  ~~${entry.item.title}~~${by}`);
+      print(`  ~~${entry.item.title}~~ (${entry.item.id})${by}`);
+      print(`      lifecycleStatus: ${entry.item.lifecycleStatus}`);
+      for (const audit of entry.oldAudits) {
+        print(
+          `      old audit: ${audit.actorId ?? audit.actorType} at ${audit.checkedAt}${audit.note ? ` — ${audit.note}` : ''}`,
+        );
+      }
+      if (entry.replacement) {
+        const source = entry.replacement.source;
+        print(
+          `      replacement: ${entry.replacement.title} (${entry.replacement.id}) [${entry.replacement.devStatus}]`,
+        );
+        print(
+          `      source: ${source?.type ?? 'unknown'}; ${source?.attribution ?? 'unknown'}; ${source?.location ?? 'unknown'}; eventAt: ${source?.sourceEventAt ?? source?.ingestedAt ?? 'unknown'}${source?.note ? `; ${source.note}` : ''}`,
+        );
+      }
       for (const impact of entry.item.impacts) print(`      ${impact.kind}:${impact.value}`);
     }
   }
@@ -113,12 +131,17 @@ export async function subjectCheck(
   }
   if (!args.yes) {
     const { confirm } = await import('../io.ts');
-    if (!(await confirm(`Mark requirement ${requirement.id} (${requirement.title}) as complete?`))) {
+    if (
+      !(await confirm(`Mark requirement ${requirement.id} (${requirement.title}) as complete?`))
+    ) {
       printJson({ id: requirement.id, status: 'aborted' });
       return;
     }
   }
-  const audit = await checkRequirement(ctx.uow, { requirementId: requirement.id, actorType: 'human' });
+  const audit = await checkRequirement(ctx.uow, {
+    requirementId: requirement.id,
+    actorType: 'human',
+  });
   printJson({ id: requirement.id, status: 'checked', audit });
 }
 
