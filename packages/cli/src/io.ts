@@ -9,6 +9,10 @@ export function printJson(value: unknown): void {
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
 }
 
+export function isInteractive(): boolean {
+  return Boolean(stdin.isTTY && stdout.isTTY);
+}
+
 export type ConfirmFn = (prompt: string) => Promise<boolean>;
 
 let confirmImpl: ConfirmFn = async (prompt) => {
@@ -27,4 +31,8 @@ export function setConfirmImpl(fn: ConfirmFn): void {
 
 export function confirm(prompt: string): Promise<boolean> {
   return confirmImpl(prompt);
+}
+
+export async function confirmIfInteractive(prompt: string): Promise<boolean | undefined> {
+  return isInteractive() ? confirm(prompt) : undefined;
 }

@@ -1,6 +1,6 @@
 import { NotFoundError, uncheckRequirement } from '@trachex/domain';
 import type { AppContext } from '../app.ts';
-import { printJson } from '../io.ts';
+import { print, printJson } from '../io.ts';
 import { resolveSubjectTicket } from '../lib/subject.ts';
 
 export async function uncheck(
@@ -29,5 +29,10 @@ export async function uncheck(
     ...(args.from !== undefined ? { actorId: args.from } : {}),
     ...(args.note !== undefined ? { note: args.note } : {}),
   });
-  printJson({ id: args.requirementId, status: 'unchecked', audit });
+  if (args.json) printJson({ id: args.requirementId, status: 'unchecked', audit });
+  else {
+    print(`Unchecked requirement ${args.requirementId}.`);
+    print('Checklist state changed: yes.');
+    print('Next: subject checklist <subject-id>');
+  }
 }

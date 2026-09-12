@@ -127,11 +127,12 @@ export async function runCli(env: CliEnv): Promise<number> {
         if (sub === 'create') {
           const { positionals, values } = parseCommandArgs(rest, {
             name: { type: 'string', short: 'n' },
+            json: { type: 'boolean' },
           });
           const slug = positionals[0];
           if (!slug) throw new CliError('project create requires a slug', EXIT_USAGE, 'USAGE');
           const name = typeof values.name === 'string' ? values.name : slug;
-          await projectCreate(ctx.uow, { slug, name });
+          await projectCreate(ctx, { slug, name, json: values.json === true });
         } else if (sub === 'delete') {
           const { positionals, values } = parseCommandArgs(rest, {
             force: { type: 'boolean' },
@@ -152,7 +153,8 @@ export async function runCli(env: CliEnv): Promise<number> {
           if (!slug) throw new CliError('project use requires a slug', EXIT_USAGE, 'USAGE');
           await projectUse(ctx, { slug });
         } else if (sub === 'list') {
-          await projectList(ctx.uow);
+          const { values } = parseCommandArgs(rest, { json: { type: 'boolean' } });
+          await projectList(ctx.uow, { json: values.json === true });
         } else if (sub === 'repo') {
           const [repoSub, ...repoRest] = rest;
           if (repoSub !== 'add') {
@@ -249,9 +251,10 @@ export async function runCli(env: CliEnv): Promise<number> {
               'USAGE',
             );
           }
-          await subjectNew(ctx.uow, {
+          await subjectNew(ctx, {
             project,
             name,
+            json: values.json === true,
             ...(typeof values.description === 'string' ? { description: values.description } : {}),
           });
         } else if (sub === 'add-doc') {
@@ -270,6 +273,7 @@ export async function runCli(env: CliEnv): Promise<number> {
             ...(project ? { project } : {}),
             document,
             ...(typeof values.fixture === 'string' ? { fixture: values.fixture } : {}),
+            json: values.json === true,
           });
         } else if (sub === 'checklist') {
           const id = positionals[0];
@@ -297,6 +301,7 @@ export async function runCli(env: CliEnv): Promise<number> {
             ...(explicitProject ? { project: explicitProject } : {}),
             requirementId,
             yes: values.yes === true,
+            json: values.json === true,
           });
         } else if (sub === 'export') {
           const id = positionals[0];
@@ -434,6 +439,7 @@ export async function runCli(env: CliEnv): Promise<number> {
             from: { type: 'string' },
             note: { type: 'string' },
             fixture: { type: 'string' },
+            json: { type: 'boolean' },
           },
         );
         const subjectId = positionals[0];
@@ -453,6 +459,7 @@ export async function runCli(env: CliEnv): Promise<number> {
           ...(typeof values.from === 'string' ? { from: values.from } : {}),
           note,
           ...(typeof values.fixture === 'string' ? { fixture: values.fixture } : {}),
+          json: values.json === true,
         });
         break;
       }
@@ -461,31 +468,37 @@ export async function runCli(env: CliEnv): Promise<number> {
           project: { type: 'string' },
           yes: { type: 'boolean', short: 'y' },
           output: { type: 'string' },
+          json: { type: 'boolean' },
         });
         const project = resolveProject(values);
         if (!project) {
           throw new CliError('proposal requires --project <slug>', EXIT_USAGE, 'USAGE');
         }
         if (sub === 'list') {
-          await proposalList(ctx, { project });
+          await proposalList(ctx, { project, json: values.json === true });
         } else if (sub === 'review') {
           const id = positionals[0];
           if (!id) throw new CliError('proposal review requires <id>', EXIT_USAGE, 'USAGE');
-          await proposalReview(ctx, { id, project });
+          await proposalReview(ctx, { id, project, json: values.json === true });
         } else if (sub === 'edit') {
           const id = positionals[0];
           const output = typeof values.output === 'string' ? values.output : undefined;
           if (!id || !output)
             throw new CliError('proposal edit requires <id> --output <file>', EXIT_USAGE, 'USAGE');
-          await proposalEdit(ctx, { id, project, output });
+          await proposalEdit(ctx, { id, project, output, json: values.json === true });
         } else if (sub === 'approve') {
           const id = positionals[0];
           if (!id) throw new CliError('proposal approve requires <id>', EXIT_USAGE, 'USAGE');
-          await proposalApprove(ctx, { id, project, yes: values.yes === true });
+          await proposalApprove(ctx, {
+            id,
+            project,
+            yes: values.yes === true,
+            json: values.json === true,
+          });
         } else if (sub === 'reject') {
           const id = positionals[0];
           if (!id) throw new CliError('proposal reject requires <id>', EXIT_USAGE, 'USAGE');
-          await proposalReject(ctx, { id, project });
+          await proposalReject(ctx, { id, project, json: values.json === true });
         } else {
           throw new CliError(`unknown proposal subcommand: ${sub}`, EXIT_USAGE, 'USAGE');
         }
@@ -497,6 +510,7 @@ export async function runCli(env: CliEnv): Promise<number> {
           {
             project: { type: 'string' },
             yes: { type: 'boolean', short: 'y' },
+            json: { type: 'boolean' },
           },
         );
         const subjectId = positionals[0];
@@ -509,6 +523,7 @@ export async function runCli(env: CliEnv): Promise<number> {
           ...(typeof values.project === 'string' ? { project: values.project } : {}),
           requirementId,
           yes: values.yes === true,
+          json: values.json === true,
         });
         break;
       }
@@ -726,13 +741,14 @@ export async function runCli(env: CliEnv): Promise<number> {
             name,
             path,
             ...(typeof repoProject === 'string' ? { project: repoProject } : {}),
+            json: values.json === true,
           });
         } else if (sub === 'list') {
           await repoList(ctx.uow, { json: values.json === true });
         } else if (sub === 'remove') {
           const id = positionals[0];
           if (!id) throw new CliError('repo remove requires <repo-id>', EXIT_USAGE, 'USAGE');
-          await repoRemove(ctx.uow, { id });
+          await repoRemove(ctx.uow, { id, json: values.json === true });
         } else if (sub === 'subject') {
           const repoSub = positionals[0];
           const subjectId = positionals[1];

@@ -13,23 +13,41 @@ import type { AppContext } from '../app.ts';
 import { readGlobalConfig, writeGlobalConfig } from '../context.ts';
 import { CliError } from '../errors.ts';
 import { serializeJson, serializeMarkdown } from '../export.ts';
-import { print, printJson } from '../io.ts';
+import { confirmIfInteractive, print, printJson } from '../io.ts';
 import { resolveSubject, resolveSubjectTicket } from '../lib/subject.ts';
 
 export async function subjectNew(
-  uow: UnitOfWork,
-  args: { project: string; name: string; description?: string },
+  ctx: AppContext,
+  args: { project: string; name: string; description?: string; json?: boolean },
 ) {
-  const project = await uow.projects.findBySlug(args.project);
+  const project = await ctx.uow.projects.findBySlug(args.project);
   if (!project) {
     throw new NotFoundError('project', args.project);
   }
-  const subject = await createSubject(uow, {
+  const subject = await createSubject(ctx.uow, {
     projectId: project.id,
     name: args.name,
     ...(args.description !== undefined ? { description: args.description } : {}),
   });
-  printJson({ id: subject.id, projectSlug: args.project, name: subject.name });
+  if (args.json) {
+    printJson({ id: subject.id, projectSlug: args.project, name: subject.name });
+    return;
+  }
+  const activate = await confirmIfInteractive(`Set subject ${subject.name} as active?`);
+  if (activate) {
+    const config = readGlobalConfig(ctx.appDir);
+    writeGlobalConfig(
+      { ...config, activeProject: args.project, activeSubject: subject.id },
+      ctx.appDir,
+    );
+  }
+  print(`Created subject ${subject.name}`);
+  print(`  id: ${subject.id}`);
+  print(`  project: ${args.project}`);
+  print(`  active: ${activate === true ? 'yes' : 'no'}`);
+  if (activate !== true) print(`Next: subject use ${subject.id}`);
+  print(`Next: subject add-doc ${subject.id} --docs <file>`);
+  print(`Next: subject checklist ${subject.id}`);
 }
 
 export async function subjectList(uow: UnitOfWork, args: { project: string; json: boolean }) {
@@ -121,7 +139,7 @@ export async function subjectChecklist(
 
 export async function subjectCheck(
   ctx: AppContext,
-  args: { id: string; project?: string; requirementId: string; yes?: boolean },
+  args: { id: string; project?: string; requirementId: string; yes?: boolean; json?: boolean },
 ) {
   const { ticket } = await subjectTicket(ctx, args.id, args.project);
   const requirement = await ctx.uow.requirements.findById(args.requirementId);
@@ -134,7 +152,8 @@ export async function subjectCheck(
     if (
       !(await confirm(`Mark requirement ${requirement.id} (${requirement.title}) as complete?`))
     ) {
-      printJson({ id: requirement.id, status: 'aborted' });
+      if (args.json) printJson({ id: requirement.id, status: 'aborted' });
+      else print('Check cancelled; checklist state unchanged.');
       return;
     }
   }
@@ -142,7 +161,12 @@ export async function subjectCheck(
     requirementId: requirement.id,
     actorType: 'human',
   });
-  printJson({ id: requirement.id, status: 'checked', audit });
+  if (args.json) printJson({ id: requirement.id, status: 'checked', audit });
+  else {
+    print(`Checked requirement ${requirement.id}.`);
+    print('Checklist state changed: yes.');
+    print(`Next: subject checklist ${args.id}`);
+  }
 }
 
 export async function subjectExport(

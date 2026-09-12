@@ -39,11 +39,11 @@ async function seedSubject(appDir: string): Promise<string> {
   );
   await run(['project', 'create', 'loyalty', '--name', 'Loyalty'], appDir);
   const subject = await capture<{ id: string }>(async () =>
-    run(['subject', 'new', '--project', 'loyalty', '--name', 'Loyalty checklist'], appDir),
+    run(['subject', 'new', '--project', 'loyalty', '--name', 'Loyalty checklist', '--json'], appDir),
   );
   await run(['subject', 'add-doc', subject.id, '--docs', fixture, '--fixture', fixture], appDir);
   const proposals = await capture<Array<{ proposal: { id: string } }>>(async () =>
-    run(['proposal', 'list', '--project', 'loyalty'], appDir),
+    run(['proposal', 'list', '--project', 'loyalty', '--json'], appDir),
   );
   const firstProposal = proposals[0]?.proposal;
   assert.ok(firstProposal, 'extraction proposal exists');

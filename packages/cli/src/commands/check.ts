@@ -1,6 +1,6 @@
 import { checkRequirement, InvalidOperationError, NotFoundError } from '@trachex/domain';
 import type { AppContext } from '../app.ts';
-import { confirm, printJson } from '../io.ts';
+import { confirm, print, printJson } from '../io.ts';
 import { resolveSubjectTicket } from '../lib/subject.ts';
 
 export async function check(
@@ -10,9 +10,10 @@ export async function check(
     project?: string;
     requirementId: string;
     yes?: boolean;
+    json?: boolean;
   },
 ) {
-  const { subject, ticket } = await resolveSubjectTicket(ctx.uow, args.subjectId, args.project);
+  const { ticket } = await resolveSubjectTicket(ctx.uow, args.subjectId, args.project);
   const requirement = await ctx.uow.requirements.findById(args.requirementId);
   if (!requirement) {
     throw new NotFoundError('requirement', args.requirementId);
@@ -25,7 +26,8 @@ export async function check(
       `Mark requirement ${args.requirementId} (${requirement.title}) as complete?`,
     );
     if (!ok) {
-      printJson({ id: args.requirementId, status: 'aborted' });
+      if (args.json) printJson({ id: args.requirementId, status: 'aborted' });
+      else print('Check cancelled; checklist state unchanged.');
       return;
     }
   }
@@ -33,5 +35,10 @@ export async function check(
     requirementId: args.requirementId,
     actorType: 'human',
   });
-  printJson({ id: args.requirementId, status: 'checked', audit });
+  if (args.json) printJson({ id: args.requirementId, status: 'checked', audit });
+  else {
+    print(`Checked requirement ${args.requirementId}.`);
+    print('Checklist state changed: yes.');
+    print('Next: subject checklist <subject-id>');
+  }
 }

@@ -6,6 +6,7 @@ import {
   archiveProject,
   archiveRequirement,
   archiveSubject,
+  approveProposal,
   buildChecklistView,
   buildProjectStatus,
   type ChecklistItem,
@@ -18,6 +19,7 @@ import {
   reorderChecklist,
   supersedeRequirement,
   uncheckRequirement,
+  rejectProposal,
 } from '@trachex/domain';
 import { buildRunAgent } from '../agent-wiring.ts';
 import type { AppContext } from '../app.ts';
@@ -414,6 +416,106 @@ async function intakeEvidence(
   }
 }
 
+async function reviewPendingProposal(ctx: AppContext, ticketId: string): Promise<void> {
+  const pending = (await ctx.uow.proposals.listByTicket(ticketId)).filter(
+    (item) => item.status === 'pending',
+  );
+  if (pending.length === 0) {
+    print('No pending proposals. Intake evidence to create one.');
+    return;
+  }
+  const chosen = valueOrCancel(
+    result(
+      await select({
+        message: 'Pending proposal to review',
+        options: [
+          ...pending.map((item) => ({ value: item.id, label: `${item.id} — ${item.kind}` })),
+          { value: '__back__', label: 'Back' },
+        ],
+      }),
+      'Proposal review cancelled',
+    ),
+  );
+  if (!chosen || chosen === '__back__') return;
+  const proposal = pending.find((item) => item.id === chosen);
+  if (!proposal) return;
+  const versions = await ctx.uow.proposals.listVersions(proposal.id);
+  const version = versions.at(-1);
+  const output = version
+    ? (JSON.parse(version.editedOutput ?? version.modelOutput) as {
+        kind: string;
+        create?: Array<{
+          title: string;
+          description?: string;
+          supersedes?: string[];
+          impacts?: Array<{ kind: string; value: string }>;
+          scenarios?: string[];
+        }>;
+        requirements?: Array<{
+          title: string;
+          description?: string;
+          supersedes?: string[];
+          impacts?: Array<{ kind: string; value: string }>;
+          scenarios?: string[];
+        }>;
+      })
+    : undefined;
+  const source = proposal.sourceId ? await ctx.uow.sources.findById(proposal.sourceId) : undefined;
+  print(`Proposal ${proposal.id} — pending`);
+  print(
+    `Source: ${source?.type ?? 'unknown'}${source?.attribution ? ` (${source.attribution})` : ''}`,
+  );
+  print(`Cause/note: ${source?.note ?? source?.location ?? 'not specified'}`);
+  print('Proposed changes (not applied):');
+  for (const draft of output?.kind === 'extraction'
+    ? (output.requirements ?? [])
+    : (output?.create ?? [])) {
+    print(`  + ${draft.title}`);
+    if (draft.description) print(`    ${draft.description}`);
+    if (draft.supersedes?.length) print(`    replaces: ${draft.supersedes.join(', ')}`);
+    for (const impact of draft.impacts ?? []) print(`    impact: ${impact.kind}:${impact.value}`);
+    for (const scenario of draft.scenarios ?? []) print(`    scenario: ${scenario}`);
+  }
+  print('Checklist state changed: no — approval is required.');
+  const action = valueOrCancel(
+    result(
+      await select({
+        message: 'Proposal action',
+        options: [
+          { value: 'approve', label: 'Approve and apply changes' },
+          { value: 'edit', label: 'Edit externally (use CLI proposal edit)' },
+          { value: 'reject', label: 'Reject proposal' },
+          { value: 'back', label: 'Back' },
+        ],
+      }),
+      'Proposal action cancelled',
+    ),
+  );
+  if (action === 'approve') {
+    const confirmation = valueOrCancel(
+      result(
+        await select({
+          message: 'Apply this proposal?',
+          options: [
+            { value: 'yes', label: 'Yes' },
+            { value: 'no', label: 'No' },
+          ],
+        }),
+        'Approval cancelled',
+      ),
+    );
+    if (confirmation === 'yes') {
+      await approveProposal(ctx.uow, { proposalId: proposal.id });
+      print('Proposal approved. Checklist state changed: applied.');
+    }
+  } else if (action === 'reject') {
+    await rejectProposal(ctx.uow, { proposalId: proposal.id });
+    print('Proposal rejected. Checklist state changed: no.');
+  } else if (action === 'edit') {
+    print(`Next: proposal edit ${proposal.id} --project <project> --output <file>`);
+  }
+}
+
 export async function tui(ctx: AppContext, env: NodeJS.ProcessEnv = process.env): Promise<void> {
   const config = readGlobalConfig(ctx.appDir);
   const colorsEnabled = config.theme?.mode !== 'no-color';
@@ -800,6 +902,7 @@ export async function tui(ctx: AppContext, env: NodeJS.ProcessEnv = process.env)
               { value: 'open', label: 'Open checklist' },
               { value: 'add', label: 'Add checklist item' },
               { value: 'intake', label: 'Intake evidence' },
+              { value: 'proposals', label: 'Review pending proposals' },
               { value: 'refresh', label: 'Refresh' },
               { value: 'settings', label: 'Settings' },
               { value: 'danger', label: 'Danger zone' },
@@ -952,6 +1055,11 @@ export async function tui(ctx: AppContext, env: NodeJS.ProcessEnv = process.env)
           const currentTicket = subjectTicket;
           if (!currentTicket) continue;
           await safe(() => intakeEvidence(ctx, selectedProject.id, currentTicket.id, env));
+          continue;
+        }
+        if (action === 'proposals') {
+          const currentTicket = subjectTicket;
+          if (currentTicket) await safe(() => reviewPendingProposal(ctx, currentTicket.id));
           continue;
         }
         if (action === 'open') {

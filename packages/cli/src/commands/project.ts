@@ -9,11 +9,30 @@ import { exportProjectArchive } from '@trachex/storage-sqlite';
 import type { AppContext } from '../app.ts';
 import { readGlobalConfig, writeGlobalConfig } from '../context.ts';
 import { CliError } from '../errors.ts';
-import { print, printJson } from '../io.ts';
+import { confirmIfInteractive, print, printJson } from '../io.ts';
 
-export async function projectCreate(uow: UnitOfWork, args: { slug: string; name: string }) {
-  const result = await createProject(uow, { slug: args.slug, name: args.name });
-  printJson({ id: result.id, slug: result.slug });
+export async function projectCreate(
+  ctx: AppContext,
+  args: { slug: string; name: string; json?: boolean },
+) {
+  const result = await createProject(ctx.uow, { slug: args.slug, name: args.name });
+  if (args.json) {
+    printJson({ id: result.id, slug: result.slug });
+    return;
+  }
+  const activate = await confirmIfInteractive(`Set project ${result.slug} as active?`);
+  if (activate) {
+    const config = readGlobalConfig(ctx.appDir);
+    const { activeSubject: _activeSubject, ...withoutSubject } = config;
+    void _activeSubject;
+    writeGlobalConfig({ ...withoutSubject, activeProject: result.slug }, ctx.appDir);
+  }
+  print(`Created project ${args.name}`);
+  print(`  slug: ${result.slug}`);
+  print(`  id: ${result.id}`);
+  print(`  active: ${activate === true ? 'yes' : 'no'}`);
+  if (activate !== true) print(`Next: project use ${result.slug}`);
+  print(`Next: subject new --project ${result.slug} --name <name>`);
 }
 
 export async function projectUse(ctx: AppContext, args: { slug: string }) {
@@ -36,9 +55,14 @@ export async function projectUse(ctx: AppContext, args: { slug: string }) {
   print(`active project: ${args.slug}`);
 }
 
-export async function projectList(uow: UnitOfWork) {
+export async function projectList(uow: UnitOfWork, args: { json: boolean }) {
   const projects = await uow.projects.list();
-  printJson(projects);
+  if (args.json) {
+    printJson(projects);
+    return;
+  }
+  if (projects.length === 0) print('(no projects)');
+  for (const project of projects) print(`${project.slug}  ${project.name}  (${project.id})`);
 }
 
 export async function projectDelete(

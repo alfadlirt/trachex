@@ -134,13 +134,17 @@ export async function ticketAddDocument(
   printJson({
     ticket: { id: ticket.id, key: ticket.key },
     source: result.source,
-    proposal: { id: result.proposal.id, kind: result.proposal.kind, status: result.proposal.status },
+    proposal: {
+      id: result.proposal.id,
+      kind: result.proposal.kind,
+      status: result.proposal.status,
+    },
   });
 }
 
 export async function subjectAddDocument(
   ctx: AppContext,
-  args: { subject: string; project?: string; document: string; fixture?: string },
+  args: { subject: string; project?: string; document: string; fixture?: string; json?: boolean },
 ) {
   const subject = await resolveSubject(ctx.uow, args.subject, args.project);
   const ticket = await ctx.uow.tickets.findById(subject.id);
@@ -162,11 +166,22 @@ export async function subjectAddDocument(
       content: readFileSync(args.document, 'utf8'),
     },
   );
-  printJson({
+  const response = {
     subject: { id: subject.id, name: subject.name },
     source: result.source,
-    proposal: { id: result.proposal.id, kind: result.proposal.kind, status: result.proposal.status },
-  });
+    proposal: {
+      id: result.proposal.id,
+      kind: result.proposal.kind,
+      status: result.proposal.status,
+    },
+  };
+  if (args.json) printJson(response);
+  else {
+    print(`Created pending proposal ${response.proposal.id} for subject ${response.subject.name}.`);
+    print(`Source: ${response.source.type}`);
+    print('Checklist state changed: no — approval is required.');
+    print(`Next: proposal review ${response.proposal.id} --project ${args.project ?? '<project>'}`);
+  }
 }
 
 export async function ticketShow(ctx: AppContext, args: { key: string; project: string }) {

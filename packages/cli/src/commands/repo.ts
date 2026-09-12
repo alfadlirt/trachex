@@ -12,7 +12,7 @@ import { resolveSubject } from '../lib/subject.ts';
 
 export async function repoAdd(
   uow: UnitOfWork,
-  args: { name: string; path: string; project?: string },
+  args: { name: string; path: string; project?: string; json?: boolean },
 ) {
   let projectId: string | undefined;
   if (args.project) {
@@ -27,11 +27,15 @@ export async function repoAdd(
     path: args.path,
     ...(projectId ? { projectId } : {}),
   });
-  print(
-    projectId
-      ? `repository ${args.name} registered for project ${args.project}`
-      : `repository ${args.name} registered globally`,
-  );
+  if (args.json) {
+    const repo = await uow.repositories.findByProjectAndSlug(projectId ?? '', args.name);
+    printJson(repo ?? { slug: args.name, path: args.path });
+  } else
+    print(
+      projectId
+        ? `repository ${args.name} registered for project ${args.project}`
+        : `repository ${args.name} registered globally`,
+    );
 }
 
 export async function repoList(uow: UnitOfWork, args: { json: boolean }) {
@@ -51,12 +55,16 @@ export async function repoList(uow: UnitOfWork, args: { json: boolean }) {
   }
 }
 
-export async function repoRemove(uow: UnitOfWork, args: { id: string }) {
+export async function repoRemove(uow: UnitOfWork, args: { id: string; json?: boolean }) {
   await removeRepository(uow, args.id);
-  print(`removed repository ${args.id}`);
+  if (args.json) printJson({ id: args.id, status: 'removed' });
+  else print(`removed repository ${args.id}`);
 }
 
-export async function subjectRepoList(uow: UnitOfWork, args: { subjectId: string; project?: string; json: boolean }) {
+export async function subjectRepoList(
+  uow: UnitOfWork,
+  args: { subjectId: string; project?: string; json: boolean },
+) {
   const subject = await resolveSubject(uow, args.subjectId, args.project);
   const repos = await uow.repositories.listBySubject(subject.id);
   if (args.json) {
@@ -72,17 +80,23 @@ export async function subjectRepoList(uow: UnitOfWork, args: { subjectId: string
   }
 }
 
-export async function subjectRepoAdd(ctx: AppContext, args: { subjectId: string; project?: string; repoId: string }) {
+export async function subjectRepoAdd(
+  ctx: AppContext,
+  args: { subjectId: string; project?: string; repoId: string; json?: boolean },
+) {
   const subject = await resolveSubject(ctx.uow, args.subjectId, args.project);
   await attachRepositoryToSubject(ctx.uow, subject.id, args.repoId);
-  print(`assigned repository ${args.repoId} to subject ${subject.id}`);
+  if (args.json)
+    printJson({ subjectId: subject.id, repositoryId: args.repoId, status: 'assigned' });
+  else print(`assigned repository ${args.repoId} to subject ${subject.id}`);
 }
 
 export async function subjectRepoRemove(
   ctx: AppContext,
-  args: { subjectId: string; project?: string; repoId: string },
+  args: { subjectId: string; project?: string; repoId: string; json?: boolean },
 ) {
   const subject = await resolveSubject(ctx.uow, args.subjectId, args.project);
   await detachRepositoryFromSubject(ctx.uow, subject.id, args.repoId);
-  print(`removed repository ${args.repoId} from subject ${subject.id}`);
+  if (args.json) printJson({ subjectId: subject.id, repositoryId: args.repoId, status: 'removed' });
+  else print(`removed repository ${args.repoId} from subject ${subject.id}`);
 }

@@ -38,6 +38,7 @@ Confirm it exists:
 
 ```bash
 pnpm run trachex project list
+pnpm run trachex project use "subscription-billing"
 ```
 
 ## 3. Create The Initial Subject
