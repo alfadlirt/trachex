@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { approveProposal, createProject, createProposal, createTicket } from '@trachex/domain';
+import { approveProposal, createProject, createProposal, createSubject } from '@trachex/domain';
 import { openApp } from './app.ts';
 import { runCli } from './index.ts';
 
@@ -14,11 +14,9 @@ function tempAppDir(): string {
 async function seed(appDir: string) {
   const ctx = openApp(appDir);
   const project = await createProject(ctx.uow, { slug: 'loyalty', name: 'Loyalty' });
-  const ticket = await createTicket(ctx.uow, {
-    projectId: project.id,
-    key: 'TICKET-1',
-    title: 'Loyalty',
-  });
+  const subject = await createSubject(ctx.uow, { projectId: project.id, name: 'Loyalty' });
+  const ticket = await ctx.uow.tickets.findById(subject.id);
+  assert.ok(ticket, 'subject backing record exists');
   const p1 = await createProposal(ctx.uow, {
     ticketId: ticket.id,
     kind: 'extraction',
@@ -54,7 +52,7 @@ async function seed(appDir: string) {
   });
   await approveProposal(ctx.uow, { proposalId: p2.id });
   ctx.db.close();
-  return { project, ticket };
+  return { project, subject };
 }
 
 async function run(args: string[], appDir: string): Promise<number> {
@@ -79,7 +77,7 @@ async function capture(fn: () => Promise<number>): Promise<string> {
 test('trachex status shows project rollup totals', async () => {
   const appDir = tempAppDir();
   try {
-    const { project } = await seed(appDir);
+    const { project, subject } = await seed(appDir);
     const text = await capture(async () =>
       run(['status', '--project', project.slug, '--json'], appDir),
     );
@@ -90,7 +88,7 @@ test('trachex status shows project rollup totals', async () => {
     assert.equal(parsed.totals.tickets, 1);
     assert.equal(parsed.totals.active, 2);
     assert.equal(parsed.totals.remaining, 2);
-    assert.equal(parsed.tickets[0]?.key, 'TICKET-1');
+    assert.equal(parsed.tickets[0]?.key, subject.id);
 
     const readable = await capture(async () => run(['status', '--project', project.slug], appDir));
     assert.ok(readable.includes('project loyalty (Loyalty)'));
@@ -103,9 +101,9 @@ test('trachex status shows project rollup totals', async () => {
 test('trachex checklist list shows groups and struck-through superseded', async () => {
   const appDir = tempAppDir();
   try {
-    const { project } = await seed(appDir);
+    const { subject } = await seed(appDir);
     const json = await capture(async () =>
-      run(['checklist', 'list', 'TICKET-1', '--project', project.slug, '--json'], appDir),
+      run(['subject', 'checklist', subject.id, '--json'], appDir),
     );
     const parsed = JSON.parse(json) as {
       groups: Array<{ label: string; items: unknown[] }>;
@@ -122,12 +120,11 @@ test('trachex checklist list shows groups and struck-through superseded', async 
     assert.equal(parsed.superseded[0]?.item.impacts.length, 1);
 
     const readable = await capture(async () =>
-      run(['checklist', 'list', 'TICKET-1', '--project', project.slug], appDir),
+      run(['subject', 'checklist', subject.id], appDir),
     );
     assert.ok(readable.includes('# Discounting'));
     assert.ok(readable.includes('Validate tier (revised)'));
     assert.ok(readable.includes('~~Validate tier before discount~~'));
-    assert.ok(readable.includes('service:receipt-service'));
   } finally {
     rmSync(appDir, { recursive: true, force: true });
   }

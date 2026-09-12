@@ -1,6 +1,7 @@
 export type IsoDateTime = string;
 
 export type SourceType =
+  | 'document'
   | 'fsd'
   | 'brd'
   | 'chat'

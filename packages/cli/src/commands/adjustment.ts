@@ -1,32 +1,22 @@
 import { runReconciliation } from '@trachex/agent';
-import { createTicket, NotFoundError, type SourceType } from '@trachex/domain';
+import type { SourceType } from '@trachex/domain';
 import { buildRunAgent } from '../agent-wiring.ts';
 import type { AppContext } from '../app.ts';
 import { printJson } from '../io.ts';
+import { resolveSubjectTicket } from '../lib/subject.ts';
 
 export async function adjustment(
   ctx: AppContext,
   args: {
-    key: string;
-    project: string;
+    subjectId: string;
+    project?: string;
     source: string;
     from?: string;
     note: string;
     fixture?: string;
   },
 ) {
-  const project = await ctx.uow.projects.findBySlug(args.project);
-  if (!project) {
-    throw new NotFoundError('project', args.project);
-  }
-  let ticket = await ctx.uow.tickets.findByProjectAndKey(project.id, args.key);
-  if (!ticket) {
-    ticket = await createTicket(ctx.uow, {
-      projectId: project.id,
-      key: args.key,
-      title: args.key,
-    });
-  }
+  const { subject, ticket } = await resolveSubjectTicket(ctx.uow, args.subjectId, args.project);
   const runAgent = buildRunAgent({
     search: ctx.uow.search,
     ...(args.fixture !== undefined ? { fixturePath: args.fixture } : {}),
@@ -36,7 +26,7 @@ export async function adjustment(
     { runAgent },
     {
       appDir: ctx.appDir,
-      projectId: project.id,
+      projectId: subject.projectId,
       ticketId: ticket.id,
       type: args.source as SourceType,
       ...(args.from !== undefined ? { attribution: args.from } : {}),
@@ -46,7 +36,7 @@ export async function adjustment(
     },
   );
   printJson({
-    ticket: { id: ticket.id, key: ticket.key },
+    subject: { id: subject.id, name: subject.name },
     source: result.source,
     proposal: {
       id: result.proposal.id,

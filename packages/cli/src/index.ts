@@ -2,7 +2,7 @@ import { PipelineError } from '@trachex/agent';
 import { startDashboard } from '@trachex/api';
 import { DomainError } from '@trachex/domain';
 import { runMcpServer } from '@trachex/mcp';
-import { resolveBundledDashboardDist } from '@trachex/shared';
+import { loadTrachexEnv, resolveBundledDashboardDist } from '@trachex/shared';
 import { openApp } from './app.ts';
 import { parseCommandArgs } from './args.ts';
 import { adjustment } from './commands/adjustment.ts';
@@ -37,12 +37,15 @@ import { settingsSet, settingsShow } from './commands/settings.ts';
 import { statusProject } from './commands/status.ts';
 import {
   subjectDelete,
+  subjectCheck,
+  subjectChecklist,
+  subjectExport,
   subjectList,
   subjectNew,
   subjectShow,
   subjectUse,
 } from './commands/subject.ts';
-import { contextIngest, ticketNew, ticketShow } from './commands/ticket.ts';
+import { contextIngest, subjectAddDocument } from './commands/ticket.ts';
 import { tui } from './commands/tui.ts';
 import { uncheck } from './commands/uncheck.ts';
 import { resolveProjectSlug } from './context.ts';
@@ -58,8 +61,9 @@ export interface CliEnv {
 
 export async function runCli(env: CliEnv): Promise<number> {
   const argv = env.argv;
+  const runtimeEnv = loadTrachexEnv(env.env ?? process.env);
   const [command, sub, ...rest] = argv;
-  const ctx = openApp(env.appDir);
+  const ctx = openApp(env.appDir, runtimeEnv);
   const projectFlag = (values: Record<string, string | boolean | undefined>) =>
     typeof values.project === 'string' ? values.project : undefined;
   const resolveProject = (values: Record<string, string | boolean | undefined>) => {
@@ -85,7 +89,11 @@ export async function runCli(env: CliEnv): Promise<number> {
       print('subject new --project <slug> --name <name> [--description <d>]');
       print('subject list --project <slug>');
       print('subject show <subject-id>');
-      print('subject use <subject-id> | --clear');
+       print('subject use <subject-id> | --clear');
+       print('subject add-doc <subject-id> --docs <file> [--fixture <proposal.json>]');
+       print('subject checklist <subject-id> [--json]');
+       print('subject check <subject-id> <requirement-id> [--yes]');
+       print('subject export <subject-id> --format markdown|json [--out <file>]');
       print('subject delete <subject-id> --force --confirm-name <exact name>');
       print(
         'settings show | settings set theme auto|dark|light|no-color | settings set accent <color>',
@@ -93,21 +101,15 @@ export async function runCli(env: CliEnv): Promise<number> {
       print('repo add --name <slug> --path <path>');
       print('repo list | repo remove <repo-id>');
       print('subject repo <add|list|remove> <subject-id> [<repo-id>]');
-      print('ticket new <key> --project <slug> --fsd <file>');
-      print('ticket show <key> --project <slug>');
-      print('adjustment <key> --project <slug> --source <type> --from <actor> --note <text>');
+       print('subject adjustment <subject-id> --source <type> --from <actor> --note <text>');
       print('proposal list --project <slug>');
       print('proposal approve <id> --project <slug> [--yes]');
       print('proposal reject <id> --project <slug>');
-      print('check <key> <requirement-id> --project <slug> [--yes]');
-      print('export <key> --project <slug> --format markdown|json [--out <file>]');
+       print('subject check <subject-id> <requirement-id> [--yes]');
+       print('subject export <subject-id> --format markdown|json [--out <file>]');
       print('status [--project <slug>] [--json]');
-      print('checklist list <ticketKey> --project <slug> [--json]');
-      print('checklist add <ticketKey> --project <slug> --title <t> [--from <actor>]');
-      print('checklist edit <ticketKey> <requirement-id> --project <slug> --title <t>');
-      print('checklist supersede <ticketKey> <requirement-id> --project <slug>');
-      print('checklist reorder <ticketKey> --project <slug> --order <id1,id2,...>');
-      print('uncheck <ticketKey> <requirement-id> --project <slug>');
+       print('subject checklist <subject-id> [list|add|edit|supersede|reorder]');
+       print('subject uncheck <subject-id> <requirement-id>');
       print('dashboard | mcp | infra | eval | tui');
       return EXIT_OK;
     }
@@ -222,6 +224,12 @@ export async function runCli(env: CliEnv): Promise<number> {
           description: { type: 'string' },
           clear: { type: 'boolean' },
           json: { type: 'boolean' },
+          docs: { type: 'string' },
+          fixture: { type: 'string' },
+          yes: { type: 'boolean', short: 'y' },
+          format: { type: 'string' },
+          out: { type: 'string' },
+          subject: { type: 'string' },
         });
         if (sub === 'new') {
           const project = resolveProject(values);
@@ -238,22 +246,79 @@ export async function runCli(env: CliEnv): Promise<number> {
             name,
             ...(typeof values.description === 'string' ? { description: values.description } : {}),
           });
+        } else if (sub === 'add-doc') {
+          const subject = positionals[0];
+          const document = typeof values.docs === 'string' ? values.docs : undefined;
+          const project = typeof values.project === 'string' ? values.project : undefined;
+          if (!subject || !document) {
+            throw new CliError('subject add-doc requires <subject-id|name|slug> --docs <file>', EXIT_USAGE, 'USAGE');
+          }
+          await subjectAddDocument(ctx, {
+            subject,
+            ...(project ? { project } : {}),
+            document,
+            ...(typeof values.fixture === 'string' ? { fixture: values.fixture } : {}),
+          });
+        } else if (sub === 'checklist') {
+          const id = positionals[0];
+          if (!id) throw new CliError('subject checklist requires <subject-id>', EXIT_USAGE, 'USAGE');
+          const explicitProject = projectFlag(values);
+          await subjectChecklist(ctx, {
+            id,
+            ...(explicitProject ? { project: explicitProject } : {}),
+            json: values.json === true,
+          });
+        } else if (sub === 'check') {
+          const id = positionals[0];
+          const requirementId = positionals[1];
+          if (!id || !requirementId) {
+            throw new CliError('subject check requires <subject-id> <requirement-id>', EXIT_USAGE, 'USAGE');
+          }
+          const explicitProject = projectFlag(values);
+          await subjectCheck(ctx, {
+            id,
+            ...(explicitProject ? { project: explicitProject } : {}),
+            requirementId,
+            yes: values.yes === true,
+          });
+        } else if (sub === 'export') {
+          const id = positionals[0];
+          const format = values.format;
+          if (!id || (format !== 'markdown' && format !== 'json')) {
+            throw new CliError('subject export requires <subject-id> --format markdown|json', EXIT_USAGE, 'USAGE');
+          }
+          const explicitProject = projectFlag(values);
+          await subjectExport(ctx, {
+            id,
+            ...(explicitProject ? { project: explicitProject } : {}),
+            format,
+            ...(typeof values.out === 'string' ? { out: values.out } : {}),
+          });
         } else if (sub === 'list') {
           const project = resolveProject(values);
           await subjectList(ctx.uow, { project, json: values.json === true });
         } else if (sub === 'show') {
           const id = positionals[0];
           if (!id) throw new CliError('subject show requires <subject-id>', EXIT_USAGE, 'USAGE');
-          await subjectShow(ctx.uow, { id, json: values.json === true });
+          const explicitProject = projectFlag(values);
+          await subjectShow(ctx.uow, {
+            id,
+            ...(explicitProject ? { project: explicitProject } : {}),
+            json: values.json === true,
+          });
         } else if (sub === 'delete') {
           const { positionals, values } = parseCommandArgs(rest, {
             force: { type: 'boolean' },
             'confirm-name': { type: 'string' },
+            project: { type: 'string' },
           });
+          const explicitDeleteProject =
+            typeof values.project === 'string' ? values.project : undefined;
           const id = positionals[0];
           if (!id) throw new CliError('subject delete requires <subject-id>', EXIT_USAGE, 'USAGE');
           await subjectDelete(ctx, {
             id,
+            ...(typeof explicitDeleteProject === 'string' ? { project: explicitDeleteProject } : {}),
             force: values.force === true,
             ...(typeof values['confirm-name'] === 'string'
               ? { confirmName: values['confirm-name'] }
@@ -280,7 +345,7 @@ export async function runCli(env: CliEnv): Promise<number> {
             );
           }
           if (repoSub === 'list') {
-            await subjectRepoList(ctx.uow, { subjectId, json: values.json === true });
+            await subjectRepoList(ctx.uow, { subjectId, ...(typeof values.project === "string" ? { project: values.project } : {}), json: values.json === true });
           } else if (repoSub === 'add') {
             if (!repoId) {
               throw new CliError(
@@ -289,7 +354,7 @@ export async function runCli(env: CliEnv): Promise<number> {
                 'USAGE',
               );
             }
-            await subjectRepoAdd(ctx, { subjectId, repoId });
+            await subjectRepoAdd(ctx, { subjectId, ...(typeof values.project === "string" ? { project: values.project } : {}), repoId });
           } else if (repoSub === 'remove') {
             if (!repoId) {
               throw new CliError(
@@ -298,7 +363,7 @@ export async function runCli(env: CliEnv): Promise<number> {
                 'USAGE',
               );
             }
-            await subjectRepoRemove(ctx, { subjectId, repoId });
+            await subjectRepoRemove(ctx, { subjectId, ...(typeof values.project === "string" ? { project: values.project } : {}), repoId });
           } else {
             throw new CliError(`unknown subject repo subcommand: ${repoSub}`, EXIT_USAGE, 'USAGE');
           }
@@ -325,41 +390,6 @@ export async function runCli(env: CliEnv): Promise<number> {
         }
         break;
       }
-      case 'ticket': {
-        if (sub === 'new') {
-          const { positionals, values } = parseCommandArgs(rest, {
-            project: { type: 'string' },
-            fsd: { type: 'string' },
-            note: { type: 'string' },
-            fixture: { type: 'string' },
-          });
-          const key = positionals[0];
-          const project = resolveProject(values);
-          if (!key || !project) {
-            throw new CliError('ticket new requires <key> --project <slug>', EXIT_USAGE, 'USAGE');
-          }
-          await ticketNew(ctx, {
-            key,
-            project,
-            ...(typeof values.fsd === 'string' ? { fsd: values.fsd } : {}),
-            ...(typeof values.note === 'string' ? { note: values.note } : {}),
-            ...(typeof values.fixture === 'string' ? { fixture: values.fixture } : {}),
-          });
-        } else if (sub === 'show') {
-          const { positionals, values } = parseCommandArgs(rest, {
-            project: { type: 'string' },
-          });
-          const key = positionals[0];
-          const project = resolveProject(values);
-          if (!key || !project) {
-            throw new CliError('ticket show requires <key> --project <slug>', EXIT_USAGE, 'USAGE');
-          }
-          await ticketShow(ctx, { key, project });
-        } else {
-          throw new CliError(`unknown ticket subcommand: ${sub}`, EXIT_USAGE, 'USAGE');
-        }
-        break;
-      }
       case 'adjustment': {
         const { positionals, values } = parseCommandArgs(
           [sub, ...rest].filter(Boolean) as string[],
@@ -371,20 +401,19 @@ export async function runCli(env: CliEnv): Promise<number> {
             fixture: { type: 'string' },
           },
         );
-        const key = positionals[0];
-        const project = resolveProject(values);
+        const subjectId = positionals[0];
         const source = typeof values.source === 'string' ? values.source : undefined;
         const note = typeof values.note === 'string' ? values.note : undefined;
-        if (!key || !project || !source || !note) {
+        if (!subjectId || !source || !note) {
           throw new CliError(
-            'adjustment requires <key> --project <slug> --source <type> --note <text>',
+            'adjustment requires <subject-id> --source <type> --note <text>',
             EXIT_USAGE,
             'USAGE',
           );
         }
         await adjustment(ctx, {
-          key,
-          project,
+          subjectId,
+          ...(typeof values.project === "string" ? { project: values.project } : {}),
           source,
           ...(typeof values.from === 'string' ? { from: values.from } : {}),
           note,
@@ -424,17 +453,16 @@ export async function runCli(env: CliEnv): Promise<number> {
             yes: { type: 'boolean', short: 'y' },
           },
         );
-        const key = positionals[0];
+        const subjectId = positionals[0];
         const requirementId = positionals[1];
-        const project = resolveProject(values);
-        if (!key || !requirementId || !project) {
+        if (!subjectId || !requirementId) {
           throw new CliError(
-            'check requires <key> <requirement-id> --project <slug>',
+            'check requires <subject-id> <requirement-id>',
             EXIT_USAGE,
             'USAGE',
           );
         }
-        await check(ctx, { key, requirementId, project, yes: values.yes === true });
+        await check(ctx, { subjectId, ...(typeof values.project === "string" ? { project: values.project } : {}), requirementId, yes: values.yes === true });
         break;
       }
       case 'export': {
@@ -446,18 +474,17 @@ export async function runCli(env: CliEnv): Promise<number> {
             out: { type: 'string', short: 'o' },
           },
         );
-        const key = positionals[0];
-        const project = resolveProject(values);
+        const subjectId = positionals[0];
         const format = typeof values.format === 'string' ? values.format : 'markdown';
-        if (!key || !project) {
-          throw new CliError('export requires <key> --project <slug>', EXIT_USAGE, 'USAGE');
+        if (!subjectId) {
+          throw new CliError('export requires <subject-id>', EXIT_USAGE, 'USAGE');
         }
         if (format !== 'markdown' && format !== 'json') {
           throw new CliError('--format must be markdown or json', EXIT_USAGE, 'USAGE');
         }
         await exportSummary(ctx, {
-          key,
-          project,
+          subjectId,
+          ...(typeof values.project === "string" ? { project: values.project } : {}),
           format,
           ...(typeof values.out === 'string' ? { out: values.out } : {}),
         });
@@ -479,18 +506,17 @@ export async function runCli(env: CliEnv): Promise<number> {
             json: { type: 'boolean' },
             quiet: { type: 'boolean' },
           });
-          const key = positionals[0];
-          const project = resolveProject(values);
-          if (!key || !project) {
+          const subjectId = positionals[0];
+          if (!subjectId) {
             throw new CliError(
-              'checklist list requires <ticketKey> --project <slug>',
+              'checklist list requires <subject-id>',
               EXIT_USAGE,
               'USAGE',
             );
           }
           await checklistList(ctx, {
-            key,
-            project,
+            subjectId,
+            ...(typeof values.project === "string" ? { project: values.project } : {}),
             json: values.json === true,
             quiet: values.quiet === true,
           });
@@ -505,19 +531,18 @@ export async function runCli(env: CliEnv): Promise<number> {
             note: { type: 'string' },
             json: { type: 'boolean' },
           });
-          const key = positionals[0];
-          const project = resolveProject(values);
+          const subjectId = positionals[0];
           const title = typeof values.title === 'string' ? values.title : undefined;
-          if (!key || !project || !title) {
+          if (!subjectId || !title) {
             throw new CliError(
-              'checklist add requires <ticketKey> --project <slug> --title <t>',
+              'checklist add requires <subject-id> --title <t>',
               EXIT_USAGE,
               'USAGE',
             );
           }
           await checklistAdd(ctx, {
-            key,
-            project,
+            subjectId,
+            ...(typeof values.project === "string" ? { project: values.project } : {}),
             title,
             ...(typeof values.description === 'string' ? { description: values.description } : {}),
             ...(typeof values.parent === 'string' ? { parent: values.parent } : {}),
@@ -536,19 +561,18 @@ export async function runCli(env: CliEnv): Promise<number> {
             note: { type: 'string' },
             json: { type: 'boolean' },
           });
-          const key = positionals[0];
+          const subjectId = positionals[0];
           const requirementId = positionals[1];
-          const project = resolveProject(values);
-          if (!key || !requirementId || !project) {
+          if (!subjectId || !requirementId) {
             throw new CliError(
-              'checklist edit requires <ticketKey> <requirement-id> --project <slug>',
+              'checklist edit requires <subject-id> <requirement-id>',
               EXIT_USAGE,
               'USAGE',
             );
           }
           await checklistEdit(ctx, {
-            key,
-            project,
+            subjectId,
+            ...(typeof values.project === "string" ? { project: values.project } : {}),
             requirementId,
             ...(typeof values.title === 'string' ? { title: values.title } : {}),
             ...(typeof values.description === 'string' ? { description: values.description } : {}),
@@ -564,19 +588,18 @@ export async function runCli(env: CliEnv): Promise<number> {
             note: { type: 'string' },
             json: { type: 'boolean' },
           });
-          const key = positionals[0];
+          const subjectId = positionals[0];
           const requirementId = positionals[1];
-          const project = resolveProject(values);
-          if (!key || !requirementId || !project) {
+          if (!subjectId || !requirementId) {
             throw new CliError(
-              'checklist supersede requires <ticketKey> <requirement-id> --project <slug>',
+              'checklist supersede requires <subject-id> <requirement-id>',
               EXIT_USAGE,
               'USAGE',
             );
           }
           await checklistSupersede(ctx, {
-            key,
-            project,
+            subjectId,
+            ...(typeof values.project === "string" ? { project: values.project } : {}),
             requirementId,
             ...(typeof values.from === 'string' ? { from: values.from } : {}),
             ...(typeof values.note === 'string' ? { note: values.note } : {}),
@@ -588,18 +611,17 @@ export async function runCli(env: CliEnv): Promise<number> {
             order: { type: 'string' },
             json: { type: 'boolean' },
           });
-          const key = positionals[0];
-          const project = resolveProject(values);
+          const subjectId = positionals[0];
           const orderRaw = typeof values.order === 'string' ? values.order : '';
           const order = orderRaw.split(',').filter((id) => id.length > 0);
-          if (!key || !project || order.length === 0) {
+          if (!subjectId || order.length === 0) {
             throw new CliError(
-              'checklist reorder requires <ticketKey> --project <slug> --order <id1,id2,...>',
+              'checklist reorder requires <subject-id> --order <id1,id2,...>',
               EXIT_USAGE,
               'USAGE',
             );
           }
-          await checklistReorder(ctx, { key, project, order, json: values.json === true });
+          await checklistReorder(ctx, { subjectId, ...(typeof values.project === "string" ? { project: values.project } : {}), order, json: values.json === true });
         } else {
           throw new CliError(`unknown checklist subcommand: ${sub}`, EXIT_USAGE, 'USAGE');
         }
@@ -615,20 +637,19 @@ export async function runCli(env: CliEnv): Promise<number> {
             json: { type: 'boolean' },
           },
         );
-        const key = positionals[0];
+        const subjectId = positionals[0];
         const requirementId = positionals[1];
-        const project = resolveProject(values);
-        if (!key || !requirementId || !project) {
+        if (!subjectId || !requirementId) {
           throw new CliError(
-            'uncheck requires <ticketKey> <requirement-id> --project <slug>',
+            'uncheck requires <subject-id> <requirement-id>',
             EXIT_USAGE,
             'USAGE',
           );
         }
         await uncheck(ctx, {
-          key,
+          subjectId,
+          ...(typeof values.project === "string" ? { project: values.project } : {}),
           requirementId,
-          project,
           ...(typeof values.from === 'string' ? { from: values.from } : {}),
           ...(typeof values.note === 'string' ? { note: values.note } : {}),
           json: values.json === true,
@@ -636,7 +657,7 @@ export async function runCli(env: CliEnv): Promise<number> {
         break;
       }
       case 'tui': {
-        await tui(ctx);
+        await tui(ctx, runtimeEnv);
         return EXIT_OK;
       }
       case 'repo': {
@@ -680,7 +701,7 @@ export async function runCli(env: CliEnv): Promise<number> {
             );
           }
           if (repoSub === 'list') {
-            await subjectRepoList(ctx.uow, { subjectId, json: values.json === true });
+            await subjectRepoList(ctx.uow, { subjectId, ...(typeof values.project === "string" ? { project: values.project } : {}), json: values.json === true });
           } else if (repoSub === 'add') {
             if (!repoId) {
               throw new CliError(
@@ -689,7 +710,7 @@ export async function runCli(env: CliEnv): Promise<number> {
                 'USAGE',
               );
             }
-            await subjectRepoAdd(ctx, { subjectId, repoId });
+            await subjectRepoAdd(ctx, { subjectId, ...(typeof values.project === "string" ? { project: values.project } : {}), repoId });
           } else if (repoSub === 'remove') {
             if (!repoId) {
               throw new CliError(
@@ -698,7 +719,7 @@ export async function runCli(env: CliEnv): Promise<number> {
                 'USAGE',
               );
             }
-            await subjectRepoRemove(ctx, { subjectId, repoId });
+            await subjectRepoRemove(ctx, { subjectId, ...(typeof values.project === "string" ? { project: values.project } : {}), repoId });
           } else {
             throw new CliError(`unknown repo subject subcommand: ${repoSub}`, EXIT_USAGE, 'USAGE');
           }

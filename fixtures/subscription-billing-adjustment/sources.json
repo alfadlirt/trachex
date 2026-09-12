@@ -1,0 +1,35 @@
+[
+  {
+    "id": "source-fsd-checkout",
+    "ticketId": "ticket-billing-checkout",
+    "type": "fsd",
+    "attribution": "Maya Chen, Product",
+    "sourceEventAt": "2025-01-07T11:00:00.000Z",
+    "ingestedAt": "2025-01-08T09:00:00.000Z",
+    "location": "documents/initial-fsd.md#checkout-rules",
+    "snapshotId": null,
+    "note": null
+  },
+  {
+    "id": "source-clarification-trial",
+    "ticketId": "ticket-trial-adjustment",
+    "type": "clarification",
+    "attribution": "Owen Brooks, Product",
+    "sourceEventAt": "2025-01-28T14:15:00.000Z",
+    "ingestedAt": "2025-01-28T15:00:00.000Z",
+    "location": "documents/clarification.md#conversion",
+    "snapshotId": null,
+    "note": null
+  },
+  {
+    "id": "source-uat-feedback",
+    "ticketId": "ticket-uat-feedback",
+    "type": "uat",
+    "attribution": "Priya Nair, QA",
+    "sourceEventAt": "2025-02-12T13:20:00.000Z",
+    "ingestedAt": "2025-02-12T14:00:00.000Z",
+    "location": "documents/uat-feedback.md#findings",
+    "snapshotId": null,
+    "note": null
+  }
+]

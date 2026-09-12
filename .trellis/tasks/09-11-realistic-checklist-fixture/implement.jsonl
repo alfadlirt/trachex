@@ -1,0 +1,4 @@
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Fixture spans ingestion documents, normalized domain records, checklist views, and agent-facing review prompts; use the cross-layer guide to verify references and data flow."}
+{"file":"packages/domain/src/entities.ts","reason":"Canonical entity vocabulary and lifecycle/status fields used by the fixture data."}
+{"file":"packages/domain/src/views.ts","reason":"Checklist and project status behavior that the fixture README and expected state must exercise."}
+{"file":"packages/domain/src/services.ts","reason":"Source, proposal, supersession, completion audit, baseline, and export behavior represented by the fixture."}

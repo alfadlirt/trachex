@@ -46,7 +46,7 @@ Explicit `--project <slug>` always wins over the active-project shortcut.
 ## Ticket workflow
 
 ```bash
-trachex ticket new TICKET-1234 --project loyalty --fsd FSD-Loyalty-v1.2.md
+trachex ticket new TICKET-1234 --project loyalty --docs requirements.md
 trachex proposal list --project loyalty
 trachex proposal approve <proposal-id> --project loyalty --yes
 trachex check TICKET-1234 <requirement-id> --project loyalty --yes

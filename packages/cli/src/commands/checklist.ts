@@ -8,16 +8,16 @@ import {
 import type { AppContext } from '../app.ts';
 import { banner } from '../context.ts';
 import { print, printJson } from '../io.ts';
+import { resolveSubjectTicket } from '../lib/subject.ts';
 
 export async function checklistList(
   ctx: AppContext,
-  args: { key: string; project: string; json: boolean; quiet?: boolean },
+  args: { subjectId: string; project?: string; json: boolean; quiet?: boolean },
 ) {
-  const project = await ctx.uow.projects.findBySlug(args.project);
-  if (!project) {
-    throw new NotFoundError('project', args.project);
-  }
-  const view = await buildChecklistView(ctx.uow, { projectId: project.id, ticketKey: args.key });
+  const { subject, ticket } = await resolveSubjectTicket(ctx.uow, args.subjectId, args.project);
+  const project = await ctx.uow.projects.findById(subject.projectId);
+  if (!project) throw new NotFoundError('project', subject.projectId);
+  const view = await buildChecklistView(ctx.uow, { projectId: project.id, ticketKey: ticket.key });
   if (args.json) {
     printJson(view);
     return;
@@ -88,8 +88,8 @@ function printItemDetail(item: ChecklistItem, indent: string): void {
 export type { ChecklistView };
 
 export interface ChecklistAddArgs {
-  key: string;
-  project: string;
+  subjectId: string;
+  project?: string;
   title: string;
   description?: string;
   parent?: string;
@@ -100,14 +100,7 @@ export interface ChecklistAddArgs {
 }
 
 export async function checklistAdd(ctx: AppContext, args: ChecklistAddArgs) {
-  const project = await ctx.uow.projects.findBySlug(args.project);
-  if (!project) {
-    throw new NotFoundError('project', args.project);
-  }
-  const ticket = await ctx.uow.tickets.findByProjectAndKey(project.id, args.key);
-  if (!ticket) {
-    throw new NotFoundError('ticket', args.key);
-  }
+  const ticket = await subjectTicket(ctx, args.subjectId, args.project);
   const { addRequirementManual } = await import('@trachex/domain');
   const requirement = await addRequirementManual(ctx.uow, {
     ticketId: ticket.id,
@@ -127,8 +120,8 @@ export async function checklistAdd(ctx: AppContext, args: ChecklistAddArgs) {
 }
 
 export interface ChecklistEditArgs {
-  key: string;
-  project: string;
+  subjectId: string;
+  project?: string;
   requirementId: string;
   title?: string;
   description?: string;
@@ -139,14 +132,7 @@ export interface ChecklistEditArgs {
 }
 
 export async function checklistEdit(ctx: AppContext, args: ChecklistEditArgs) {
-  const project = await ctx.uow.projects.findBySlug(args.project);
-  if (!project) {
-    throw new NotFoundError('project', args.project);
-  }
-  const ticket = await ctx.uow.tickets.findByProjectAndKey(project.id, args.key);
-  if (!ticket) {
-    throw new NotFoundError('ticket', args.key);
-  }
+  const ticket = await subjectTicket(ctx, args.subjectId, args.project);
   const { editRequirementContent } = await import('@trachex/domain');
   const requirement = await editRequirementContent(ctx.uow, {
     ticketId: ticket.id,
@@ -166,8 +152,8 @@ export async function checklistEdit(ctx: AppContext, args: ChecklistEditArgs) {
 }
 
 export interface ChecklistSupersedeArgs {
-  key: string;
-  project: string;
+  subjectId: string;
+  project?: string;
   requirementId: string;
   from?: string;
   note?: string;
@@ -175,14 +161,7 @@ export interface ChecklistSupersedeArgs {
 }
 
 export async function checklistSupersede(ctx: AppContext, args: ChecklistSupersedeArgs) {
-  const project = await ctx.uow.projects.findBySlug(args.project);
-  if (!project) {
-    throw new NotFoundError('project', args.project);
-  }
-  const ticket = await ctx.uow.tickets.findByProjectAndKey(project.id, args.key);
-  if (!ticket) {
-    throw new NotFoundError('ticket', args.key);
-  }
+  const ticket = await subjectTicket(ctx, args.subjectId, args.project);
   const { supersedeRequirement } = await import('@trachex/domain');
   const requirement = await supersedeRequirement(ctx.uow, {
     ticketId: ticket.id,
@@ -199,26 +178,24 @@ export async function checklistSupersede(ctx: AppContext, args: ChecklistSuperse
 }
 
 export interface ChecklistReorderArgs {
-  key: string;
-  project: string;
+  subjectId: string;
+  project?: string;
   order: string[];
   json: boolean;
 }
 
 export async function checklistReorder(ctx: AppContext, args: ChecklistReorderArgs) {
-  const project = await ctx.uow.projects.findBySlug(args.project);
-  if (!project) {
-    throw new NotFoundError('project', args.project);
-  }
-  const ticket = await ctx.uow.tickets.findByProjectAndKey(project.id, args.key);
-  if (!ticket) {
-    throw new NotFoundError('ticket', args.key);
-  }
+  const ticket = await subjectTicket(ctx, args.subjectId, args.project);
   const { reorderChecklist } = await import('@trachex/domain');
   await reorderChecklist(ctx.uow, { ticketId: ticket.id, orderedIds: args.order });
   if (args.json) {
-    printJson({ ticketKey: args.key, order: args.order });
+    printJson({ subjectId: args.subjectId, order: args.order });
     return;
   }
   print(`reordered ${args.order.length} items`);
+}
+
+async function subjectTicket(ctx: AppContext, subjectId: string, project?: string) {
+  const { ticket } = await resolveSubjectTicket(ctx.uow, subjectId, project);
+  return ticket;
 }

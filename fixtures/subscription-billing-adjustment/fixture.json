@@ -1,0 +1,15 @@
+{
+  "project": "project.json",
+  "sources": "sources.json",
+  "requirements": "requirements.json",
+  "impacts": "impacts.json",
+  "scenarios": "scenarios.json",
+  "completionAudits": "completion-audits.json",
+  "proposals": "proposals.json",
+  "expectedFindings": "expected-findings.json",
+  "documents": [
+    "documents/initial-fsd.md",
+    "documents/clarification.md",
+    "documents/uat-feedback.md"
+  ]
+}

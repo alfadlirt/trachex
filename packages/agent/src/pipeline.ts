@@ -68,7 +68,8 @@ export async function runExtraction(uow: UnitOfWork, deps: PipelineDeps, input: 
     return { source: source.source, proposal };
   } catch (error) {
     await recordPipelineError(uow, error);
-    throw new PipelineError('extraction failed', error);
+    const detail = error instanceof Error ? `: ${error.message}` : `: ${String(error)}`;
+    throw new PipelineError(`extraction failed${detail}`, error);
   }
 }
 
@@ -104,7 +105,8 @@ export async function runReconciliation(uow: UnitOfWork, deps: PipelineDeps, inp
     return { source: source.source, proposal };
   } catch (error) {
     await recordPipelineError(uow, error);
-    throw new PipelineError('reconciliation failed', error);
+    const detail = error instanceof Error ? `: ${error.message}` : `: ${String(error)}`;
+    throw new PipelineError(`reconciliation failed${detail}`, error);
   }
 }
 

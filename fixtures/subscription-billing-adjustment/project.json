@@ -1,0 +1,43 @@
+{
+  "project": {
+    "id": "project-subscription-billing",
+    "slug": "subscription-billing",
+    "name": "Subscription Billing Portal",
+    "description": "Self-contained checklist evolution fixture for subscription checkout and trial conversion.",
+    "createdAt": "2025-01-06T09:00:00.000Z",
+    "updatedAt": "2025-02-14T16:30:00.000Z"
+  },
+  "tickets": [
+    {
+      "id": "ticket-billing-checkout",
+      "projectId": "project-subscription-billing",
+      "key": "BILL-101",
+      "title": "Launch subscription checkout",
+      "description": "Allow customers to start paid subscriptions with a trial.",
+      "createdAt": "2025-01-06T09:00:00.000Z",
+      "updatedAt": "2025-01-24T17:00:00.000Z"
+    },
+    {
+      "id": "ticket-trial-adjustment",
+      "projectId": "project-subscription-billing",
+      "key": "BILL-118",
+      "title": "Clarify trial conversion and grace period",
+      "description": "Adjust conversion timing and recovery behavior after clarification.",
+      "createdAt": "2025-01-27T10:00:00.000Z",
+      "updatedAt": "2025-02-05T15:00:00.000Z",
+      "relatedTo": "ticket-billing-checkout",
+      "relation": "adjusts"
+    },
+    {
+      "id": "ticket-uat-feedback",
+      "projectId": "project-subscription-billing",
+      "key": "BILL-127",
+      "title": "UAT billing boundary feedback",
+      "description": "Resolve timezone boundary behavior and document retry expectations.",
+      "createdAt": "2025-02-10T09:00:00.000Z",
+      "updatedAt": "2025-02-14T16:30:00.000Z",
+      "relatedTo": "ticket-billing-checkout",
+      "relation": "reports"
+    }
+  ]
+}

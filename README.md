@@ -16,6 +16,9 @@ All clients call the same application/domain services over one SQLite store:
 
 Requires **Node.js 20+**.
 
+For a complete repository-local checklist demo using the default Trachex data
+directory, see [demo-checklist-step-by-step.md](demo-checklist-step-by-step.md).
+
 ```bash
 npm install -g trachex
 ```
@@ -56,7 +59,7 @@ Explicit `--project <slug>` always wins over the active-project shortcut, and ev
 ### 3. Create a ticket and review extraction
 
 ```bash
-trachex ticket new TICKET-1234 --project loyalty --fsd FSD-Loyalty-v1.2.md
+trachex ticket new TICKET-1234 --project loyalty --docs requirements.md
 trachex ticket show TICKET-1234 --project loyalty   # raw ticket: checklist, proposals, sources
 trachex proposal list --project loyalty
 trachex proposal approve <proposal-id> --project loyalty --yes

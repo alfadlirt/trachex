@@ -1,0 +1,58 @@
+[
+  {
+    "id": "impact-1",
+    "requirementId": "req-trial-seven-days",
+    "kind": "service",
+    "value": "billing-subscription-service",
+    "createdAt": "2025-01-08T09:00:00.000Z"
+  },
+  {
+    "id": "impact-2",
+    "requirementId": "req-trial-seven-days",
+    "kind": "api",
+    "value": "POST /subscriptions",
+    "createdAt": "2025-01-08T09:00:00.000Z"
+  },
+  {
+    "id": "impact-3",
+    "requirementId": "req-card-required",
+    "kind": "page",
+    "value": "/checkout",
+    "createdAt": "2025-01-08T09:00:00.000Z"
+  },
+  {
+    "id": "impact-4",
+    "requirementId": "req-convert-day-seven",
+    "kind": "service",
+    "value": "trial-scheduler",
+    "createdAt": "2025-01-28T15:00:00.000Z"
+  },
+  {
+    "id": "impact-5",
+    "requirementId": "req-convert-day-seven",
+    "kind": "api",
+    "value": "POST /subscriptions/:id/convert",
+    "createdAt": "2025-01-28T15:00:00.000Z"
+  },
+  {
+    "id": "impact-6",
+    "requirementId": "req-grace-period",
+    "kind": "service",
+    "value": "payment-retry-worker",
+    "createdAt": "2025-01-28T15:00:00.000Z"
+  },
+  {
+    "id": "impact-7",
+    "requirementId": "req-idempotent-charge-retry",
+    "kind": "api",
+    "value": "POST /webhooks/payment",
+    "createdAt": "2025-02-12T14:00:00.000Z"
+  },
+  {
+    "id": "impact-8",
+    "requirementId": "req-invoice-timezone-display",
+    "kind": "page",
+    "value": "/account/billing",
+    "createdAt": "2025-02-12T14:00:00.000Z"
+  }
+]

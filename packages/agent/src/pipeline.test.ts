@@ -262,7 +262,8 @@ test('malformed agent output is recorded as an error and does not corrupt the ti
   };
   await assert.rejects(
     () => runExtraction(uow, { runAgent }, baseInput(project.id, ticket.id)),
-    (e: unknown) => e instanceof PipelineError,
+    (e: unknown) =>
+      e instanceof PipelineError && e.message === 'extraction failed: malformed model output',
   );
   assert.equal(uow.data.errors.length, 1);
   assert.equal(uow.data.errors[0]?.message, 'malformed model output');

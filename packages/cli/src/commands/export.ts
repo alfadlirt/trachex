@@ -1,25 +1,23 @@
 import { writeFileSync } from 'node:fs';
-import { buildExportSummary, NotFoundError } from '@trachex/domain';
+import { buildExportSummary } from '@trachex/domain';
 import type { AppContext } from '../app.ts';
 import { serializeJson, serializeMarkdown } from '../export.ts';
 import { print } from '../io.ts';
+import { resolveSubjectTicket } from '../lib/subject.ts';
 
 export async function exportSummary(
   ctx: AppContext,
   args: {
-    key: string;
-    project: string;
+    subjectId: string;
+    project?: string;
     format: 'markdown' | 'json';
     out?: string;
   },
 ) {
-  const project = await ctx.uow.projects.findBySlug(args.project);
-  if (!project) {
-    throw new NotFoundError('project', args.project);
-  }
+  const { subject, ticket } = await resolveSubjectTicket(ctx.uow, args.subjectId, args.project);
   const summary = await buildExportSummary(ctx.uow, {
-    projectId: project.id,
-    ticketKey: args.key,
+    projectId: subject.projectId,
+    ticketKey: ticket.key,
   });
   const text = args.format === 'json' ? serializeJson(summary) : serializeMarkdown(summary);
   if (args.out) {

@@ -39,7 +39,7 @@ async function run(args: string[], appDir: string): Promise<number> {
   return runCli({ argv: args, appDir });
 }
 
-test('full MVP workflow via CLI (project → repo → ticket → approve → check → export)', async () => {
+test('full MVP workflow via CLI (project → subject → approve → check → export)', async () => {
   const appDir = tempAppDir();
   try {
     const fixture = writeFixture(appDir);
@@ -53,13 +53,12 @@ test('full MVP workflow via CLI (project → repo → ticket → approve → che
       ),
       0,
     );
-    assert.equal(
-      await run(
-        ['ticket', 'new', 'TICKET-1', '--project', 'loyalty', '--fsd', fsd, '--fixture', fixture],
-        appDir,
-      ),
-      0,
+    const subject = await captureJson<{ id: string }>(async () =>
+      run(['subject', 'new', '--project', 'loyalty', '--name', 'Loyalty checklist'], appDir),
     );
+    const subjectId = subject.id;
+    const document = writeFsd(appDir);
+    await run(['subject', 'add-doc', subjectId, '--docs', document, '--fixture', fixture], appDir);
 
     const proposalsOut = await captureJson<
       Array<{ proposal: { kind: string; status: string; id: string } }>
@@ -74,28 +73,88 @@ test('full MVP workflow via CLI (project → repo → ticket → approve → che
     );
 
     const showOut = await captureJson<{
-      checklist: Array<{ id: string; devStatus: string }>;
-    }>(async () => run(['ticket', 'show', 'TICKET-1', '--project', 'loyalty'], appDir));
-    assert.equal(showOut.checklist?.length, 1);
-    assert.equal(showOut.checklist[0]?.devStatus, 'unchecked');
-    const requirementId = showOut.checklist[0]?.id as string;
+      tree: Array<{ item: { id: string; devStatus: string } }>;
+    }>(async () => run(['subject', 'checklist', subjectId, '--json'], appDir));
+    assert.equal(showOut.tree?.length, 1);
+    assert.equal(showOut.tree[0]?.item.devStatus, 'unchecked');
+    const requirementId = showOut.tree[0]?.item.id as string;
 
     assert.equal(
-      await run(['check', 'TICKET-1', requirementId, '--project', 'loyalty', '--yes'], appDir),
+      await run(['subject', 'check', subjectId, requirementId, '--yes'], appDir),
       0,
     );
 
     const exportOut = await captureText(async () =>
-      run(['export', 'TICKET-1', '--project', 'loyalty', '--format', 'markdown'], appDir),
+      run(['subject', 'export', subjectId, '--format', 'markdown'], appDir),
     );
     assert.ok(exportOut.includes('## Current Checklist'));
     assert.ok(exportOut.includes('[x] Validate loyalty tier before applying discount'));
 
     const jsonOut = await captureText(async () =>
-      run(['export', 'TICKET-1', '--project', 'loyalty', '--format', 'json'], appDir),
+      run(['subject', 'export', subjectId, '--format', 'json'], appDir),
     );
     const parsed = JSON.parse(jsonOut) as { checklist: { devStatus: string }[] };
     assert.equal(parsed.checklist[0]?.devStatus, 'checked');
+  } finally {
+    rmSync(appDir, { recursive: true, force: true });
+  }
+});
+
+test('subject add-doc records a document source', async () => {
+  const appDir = tempAppDir();
+  try {
+    const fixture = writeFixture(appDir);
+    const document = join(appDir, 'requirements.md');
+    writeFileSync(document, '# Requirements\nThe checkout must validate the plan.\n');
+    assert.equal(await run(['project', 'create', 'docs-demo'], appDir), 0);
+    const subject = await captureJson<{ id: string }>(async () =>
+      run(['subject', 'new', '--project', 'docs-demo', '--name', 'Docs checklist'], appDir),
+    );
+    const result = await captureJson<{ source: { type: string } }>(async () =>
+      run(['subject', 'add-doc', subject.id, '--docs', document, '--fixture', fixture], appDir),
+    );
+    assert.equal(result.source.type, 'document');
+  } finally {
+    rmSync(appDir, { recursive: true, force: true });
+  }
+});
+
+test('subject add-doc resolves subject name and slug', async () => {
+  const appDir = tempAppDir();
+  try {
+    const fixture = writeFixture(appDir);
+    const document = join(appDir, 'requirements.md');
+    writeFileSync(document, '# Requirements\nThe checkout must validate the plan.\n');
+    await run(['project', 'create', 'docs-demo'], appDir);
+    await run(['subject', 'new', '--project', 'docs-demo', '--name', 'Docs Checklist'], appDir);
+    assert.equal(await run(['subject', 'add-doc', 'Docs Checklist', '--project', 'docs-demo', '--docs', document, '--fixture', fixture], appDir), 0);
+    assert.equal(await run(['subject', 'add-doc', 'docs-checklist', '--project', 'docs-demo', '--docs', document, '--fixture', fixture], appDir), 0);
+  } finally {
+    rmSync(appDir, { recursive: true, force: true });
+  }
+});
+
+test('subject add-doc retries without recreating the subject', async () => {
+  const appDir = tempAppDir();
+  try {
+    const fixture = writeFixture(appDir);
+    const initial = join(appDir, 'initial.md');
+    const retry = join(appDir, 'retry.md');
+    writeFileSync(initial, '# Initial\nThe checkout must validate the plan.\n');
+    writeFileSync(retry, '# Retry\nThe checkout must validate the plan again.\n');
+    await run(['project', 'create', 'docs-demo'], appDir);
+    const subject = await captureJson<{ id: string }>(async () =>
+      run(['subject', 'new', '--project', 'docs-demo', '--name', 'Docs checklist'], appDir),
+    );
+    await run(['subject', 'add-doc', subject.id, '--docs', initial, '--fixture', fixture], appDir);
+    assert.equal(
+      await run(['subject', 'add-doc', subject.id, '--docs', retry, '--fixture', fixture], appDir),
+      0,
+    );
+    const proposals = await captureJson<Array<{ proposal: { id: string } }>>(async () =>
+      run(['proposal', 'list', '--project', 'docs-demo'], appDir),
+    );
+    assert.equal(proposals.length, 2);
   } finally {
     rmSync(appDir, { recursive: true, force: true });
   }
@@ -124,24 +183,27 @@ test('project use sets active project and --project wins', async () => {
   }
 });
 
-test('active-project fallback: ticket show works without --project after project use', async () => {
+test('active-project fallback: subject checklist works without --project after project use', async () => {
   const appDir = tempAppDir();
   try {
     const fixture = writeFixture(appDir);
     const fsd = writeFsd(appDir);
     await run(['project', 'create', 'loyalty', '--name', 'Loyalty'], appDir);
     await run(['project', 'use', 'loyalty'], appDir);
-    await run(['ticket', 'new', 'TICKET-1', '--fsd', fsd, '--fixture', fixture], appDir);
-    const showOut = await captureJson<{ ticket: { key: string } }>(async () =>
-      run(['ticket', 'show', 'TICKET-1'], appDir),
+    const subject = await captureJson<{ id: string }>(async () =>
+      run(['subject', 'new', '--project', 'loyalty', '--name', 'Loyalty checklist'], appDir),
     );
-    assert.equal(showOut.ticket.key, 'TICKET-1');
+    await run(['subject', 'add-doc', subject.id, '--docs', fsd, '--fixture', fixture], appDir);
+    const showOut = await captureJson<{ tree: unknown[] }>(async () =>
+      run(['subject', 'checklist', subject.id, '--json'], appDir),
+    );
+    assert.ok(Array.isArray(showOut.tree));
   } finally {
     rmSync(appDir, { recursive: true, force: true });
   }
 });
 
-test('context ingest ingests files into the reserved context ticket', async () => {
+test('context ingest ingests files into project context', async () => {
   const appDir = tempAppDir();
   try {
     const ctxFile = join(appDir, 'AGENTS.md');
@@ -149,10 +211,8 @@ test('context ingest ingests files into the reserved context ticket', async () =
     await run(['project', 'create', 'loyalty', '--name', 'Loyalty'], appDir);
     const code = await run(['context', 'ingest', 'loyalty', '--include', ctxFile], appDir);
     assert.equal(code, 0);
-    const showOut = await captureJson<{ checklist: unknown[] }>(async () =>
-      run(['ticket', 'show', '__context__', '--project', 'loyalty'], appDir),
-    );
-    assert.ok(Array.isArray(showOut.checklist));
+    const info = await captureText(async () => run(['info'], appDir));
+    assert.equal(typeof info, 'string');
   } finally {
     rmSync(appDir, { recursive: true, force: true });
   }
@@ -165,10 +225,11 @@ test('check without --yes aborts when confirmation is declined', async () => {
     const fixture = writeFixture(appDir);
     const fsd = writeFsd(appDir);
     await run(['project', 'create', 'loyalty', '--name', 'Loyalty'], appDir);
-    await run(
-      ['ticket', 'new', 'TICKET-1', '--project', 'loyalty', '--fsd', fsd, '--fixture', fixture],
-      appDir,
+    const subject = await captureJson<{ id: string }>(async () =>
+      run(['subject', 'new', '--project', 'loyalty', '--name', 'Loyalty checklist'], appDir),
     );
+    const subjectId = subject.id;
+    await run(['subject', 'add-doc', subjectId, '--docs', fsd, '--fixture', fixture], appDir);
     const p = await captureJson<Array<{ proposal: { id: string } }>>(async () =>
       run(['proposal', 'list', '--project', 'loyalty'], appDir),
     );
@@ -176,16 +237,16 @@ test('check without --yes aborts when confirmation is declined', async () => {
       ['proposal', 'approve', p[0]?.proposal.id as string, '--project', 'loyalty', '--yes'],
       appDir,
     );
-    const s = await captureJson<{ checklist: Array<{ id: string }> }>(async () =>
-      run(['ticket', 'show', 'TICKET-1', '--project', 'loyalty'], appDir),
+    const s = await captureJson<{ tree: Array<{ item: { id: string } }> }>(async () =>
+      run(['subject', 'checklist', subjectId, '--json'], appDir),
     );
-    const rid = s.checklist[0]?.id as string;
-    const code = await run(['check', 'TICKET-1', rid, '--project', 'loyalty'], appDir);
+    const rid = s.tree[0]?.item.id as string;
+    const code = await run(['subject', 'check', subjectId, rid], appDir);
     assert.equal(code, 0);
-    const after = await captureJson<{ checklist: Array<{ devStatus: string }> }>(async () =>
-      run(['ticket', 'show', 'TICKET-1', '--project', 'loyalty'], appDir),
+    const after = await captureJson<{ tree: Array<{ item: { devStatus: string } }> }>(async () =>
+      run(['subject', 'checklist', subjectId, '--json'], appDir),
     );
-    assert.equal(after.checklist[0]?.devStatus, 'unchecked');
+    assert.equal(after.tree[0]?.item.devStatus, 'unchecked');
   } finally {
     rmSync(appDir, { recursive: true, force: true });
   }
@@ -201,12 +262,10 @@ test('subject lifecycle: new, use, info, and active-scope banner', async () => {
     assert.ok(created.id.length > 0);
     assert.equal(await run(['subject', 'use', created.id], appDir), 0);
 
-    // A subject carries its immutable id onto the backing checklist ticket, so
-    // the checklist can be opened by the subject id without guessing.
+    // The checklist is opened directly through the subject identity.
     const checklist = await captureJson<{ ticketKey: string; title: string; tree: unknown[] }>(
-      async () => run(['checklist', 'list', created.id, '--project', 'loyalty', '--json'], appDir),
+      async () => run(['subject', 'checklist', created.id, '--json'], appDir),
     );
-    assert.equal(checklist.ticketKey, created.id);
     assert.equal(checklist.title, 'Discount cap');
     assert.deepEqual(checklist.tree, []);
 
@@ -314,10 +373,11 @@ test('checklist tree: parent-id child nests under parent in the view', async () 
     const fixture = writeFixture(appDir);
     const fsd = writeFsd(appDir);
     await run(['project', 'create', 'loyalty', '--name', 'Loyalty'], appDir);
-    await run(
-      ['ticket', 'new', 'TICKET-1', '--project', 'loyalty', '--fsd', fsd, '--fixture', fixture],
-      appDir,
+    const subject = await captureJson<{ id: string }>(async () =>
+      run(['subject', 'new', '--project', 'loyalty', '--name', 'Loyalty checklist'], appDir),
     );
+    const subjectId = subject.id;
+    await run(['subject', 'add-doc', subjectId, '--docs', fsd, '--fixture', fixture], appDir);
     const p = await captureJson<Array<{ proposal: { id: string } }>>(async () =>
       run(['proposal', 'list', '--project', 'loyalty'], appDir),
     );
@@ -326,17 +386,15 @@ test('checklist tree: parent-id child nests under parent in the view', async () 
       appDir,
     );
 
-    const show = await captureJson<{ checklist: Array<{ id: string }> }>(async () =>
-      run(['ticket', 'show', 'TICKET-1', '--project', 'loyalty'], appDir),
+    const show = await captureJson<{ tree: Array<{ item: { id: string } }> }>(async () =>
+      run(['subject', 'checklist', subjectId, '--json'], appDir),
     );
-    const parentId = show.checklist[0]?.id as string;
+    const parentId = show.tree[0]?.item.id as string;
     await run(
       [
         'checklist',
         'add',
-        'TICKET-1',
-        '--project',
-        'loyalty',
+        subjectId,
         '--title',
         'child item',
         '--parent-id',
@@ -346,7 +404,7 @@ test('checklist tree: parent-id child nests under parent in the view', async () 
     );
 
     const view = await captureJson<{ tree: Array<{ item: { id: string }; children: unknown[] }> }>(
-      async () => run(['checklist', 'list', 'TICKET-1', '--project', 'loyalty', '--json'], appDir),
+      async () => run(['subject', 'checklist', subjectId, '--json'], appDir),
     );
     const root = view.tree.find((t) => t.item.id === parentId);
     assert.ok(root, 'parent should be a root');

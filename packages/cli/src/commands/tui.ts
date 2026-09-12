@@ -302,7 +302,12 @@ async function updateSettings(ctx: AppContext): Promise<void> {
   );
 }
 
-async function intakeEvidence(ctx: AppContext, projectId: string, ticketId: string): Promise<void> {
+async function intakeEvidence(
+  ctx: AppContext,
+  projectId: string,
+  ticketId: string,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<void> {
   const mode = valueOrCancel(
     result(
       await select({
@@ -383,7 +388,7 @@ async function intakeEvidence(ctx: AppContext, projectId: string, ticketId: stri
   const spin = spinner();
   spin.start('Extracting pending checklist proposal');
   try {
-    const runAgent = buildRunAgent({ search: ctx.uow.search, env: process.env });
+    const runAgent = buildRunAgent({ search: ctx.uow.search, env });
     const result = await runExtraction(
       ctx.uow,
       { runAgent },
@@ -409,7 +414,7 @@ async function intakeEvidence(ctx: AppContext, projectId: string, ticketId: stri
   }
 }
 
-export async function tui(ctx: AppContext): Promise<void> {
+export async function tui(ctx: AppContext, env: NodeJS.ProcessEnv = process.env): Promise<void> {
   const config = readGlobalConfig(ctx.appDir);
   const colorsEnabled = config.theme?.mode !== 'no-color';
   clearTerminal();
@@ -473,6 +478,7 @@ export async function tui(ctx: AppContext): Promise<void> {
               { value: 'select', label: 'Select project' },
               { value: 'refresh', label: 'Refresh' },
               { value: 'settings', label: 'Settings' },
+              { value: 'danger', label: 'Danger zone' },
               { value: 'quit', label: 'Quit' },
             ],
           }),
@@ -485,6 +491,79 @@ export async function tui(ctx: AppContext): Promise<void> {
         }
         if (action === 'settings') {
           await safe(() => updateSettings(ctx));
+          continue;
+        }
+        if (action === 'danger') {
+          const dangerAction = result(
+            await select({
+              message: 'Home > Danger zone',
+              options: [
+                { value: 'archive_project', label: 'Archive project' },
+                {
+                  value: 'delete_project',
+                  label: 'Permanently delete project',
+                  hint: 'force + exact name',
+                },
+                { value: 'back', label: 'Back' },
+              ],
+            }),
+            'Danger menu cancelled',
+          );
+          if (dangerAction === 'archive_project') {
+            const confirm = result(
+              await select({
+                message: 'Archive this project?',
+                options: [
+                  { value: 'yes', label: 'Yes' },
+                  { value: 'no', label: 'No' },
+                ],
+              }),
+              'Archive cancelled',
+            );
+            if (confirm === 'yes' && project) {
+              await safe(async () => {
+                await archiveProject(ctx.uow, project!.id);
+                print('Project archived.');
+                const nextConfig = readGlobalConfig(ctx.appDir);
+                const {
+                  activeProject: _activeProject,
+                  activeSubject: _activeSubject,
+                  ...withoutContext
+                } = nextConfig;
+                writeGlobalConfig(withoutContext, ctx.appDir);
+                screen = 'home';
+                project = undefined;
+                subject = undefined;
+              });
+            }
+          } else if (dangerAction === 'delete_project') {
+            if (project) {
+              const exact = result(
+                await text({
+                  message: `Type the exact project name (${project.name}) to permanently delete:`,
+                }),
+                'Permanent deletion cancelled',
+              );
+              if (exact === project.name) {
+                await safe(async () => {
+                  await permanentlyDeleteProject(ctx.uow, project!.id, true);
+                  print('Project permanently deleted.');
+                  const nextConfig = readGlobalConfig(ctx.appDir);
+                  const {
+                    activeProject: _activeProject,
+                    activeSubject: _activeSubject,
+                    ...withoutContext
+                  } = nextConfig;
+                  writeGlobalConfig(withoutContext, ctx.appDir);
+                  screen = 'home';
+                  project = undefined;
+                  subject = undefined;
+                });
+              } else if (exact !== CANCEL) {
+                print('Exact name did not match; nothing was deleted.');
+              }
+            }
+          }
           continue;
         }
         if (action === 'create') {
@@ -556,6 +635,7 @@ export async function tui(ctx: AppContext): Promise<void> {
               { value: 'create', label: 'Create subject' },
               { value: 'refresh', label: 'Refresh' },
               { value: 'settings', label: 'Settings' },
+              { value: 'danger', label: 'Danger zone' },
               { value: 'back', label: 'Back' },
               { value: 'quit', label: 'Quit' },
             ],
@@ -574,6 +654,77 @@ export async function tui(ctx: AppContext): Promise<void> {
         }
         if (action === 'settings') {
           await safe(() => updateSettings(ctx));
+          continue;
+        }
+        if (action === 'danger') {
+          const dangerAction = result(
+            await select({
+              message: 'Project > Danger zone',
+              options: [
+                { value: 'archive_project', label: 'Archive project' },
+                {
+                  value: 'delete_project',
+                  label: 'Permanently delete project',
+                  hint: 'force + exact name',
+                },
+                { value: 'back', label: 'Back' },
+              ],
+            }),
+            'Danger menu cancelled',
+          );
+          if (dangerAction === 'archive_project') {
+            const confirm = result(
+              await select({
+                message: 'Archive this project?',
+                options: [
+                  { value: 'yes', label: 'Yes' },
+                  { value: 'no', label: 'No' },
+                ],
+              }),
+              'Archive cancelled',
+            );
+            if (confirm === 'yes') {
+              await safe(async () => {
+                await archiveProject(ctx.uow, project!.id);
+                print('Project archived.');
+                const nextConfig = readGlobalConfig(ctx.appDir);
+                const {
+                  activeProject: _activeProject,
+                  activeSubject: _activeSubject,
+                  ...withoutContext
+                } = nextConfig;
+                writeGlobalConfig(withoutContext, ctx.appDir);
+                screen = 'home';
+                project = undefined;
+                subject = undefined;
+              });
+            }
+          } else if (dangerAction === 'delete_project') {
+            const exact = result(
+              await text({
+                message: `Type the exact project name (${project.name}) to permanently delete:`,
+              }),
+              'Permanent deletion cancelled',
+            );
+            if (exact === project.name) {
+              await safe(async () => {
+                await permanentlyDeleteProject(ctx.uow, project!.id, true);
+                print('Project permanently deleted.');
+                const nextConfig = readGlobalConfig(ctx.appDir);
+                const {
+                  activeProject: _activeProject,
+                  activeSubject: _activeSubject,
+                  ...withoutContext
+                } = nextConfig;
+                writeGlobalConfig(withoutContext, ctx.appDir);
+                screen = 'home';
+                project = undefined;
+                subject = undefined;
+              });
+            } else if (exact !== CANCEL) {
+              print('Exact name did not match; nothing was deleted.');
+            }
+          }
           continue;
         }
         if (action === 'create') {
@@ -651,6 +802,7 @@ export async function tui(ctx: AppContext): Promise<void> {
               { value: 'intake', label: 'Intake evidence' },
               { value: 'refresh', label: 'Refresh' },
               { value: 'settings', label: 'Settings' },
+              { value: 'danger', label: 'Danger zone' },
               { value: 'back', label: 'Back' },
               { value: 'quit', label: 'Quit' },
             ],
@@ -671,6 +823,125 @@ export async function tui(ctx: AppContext): Promise<void> {
           await safe(() => updateSettings(ctx));
           continue;
         }
+        if (action === 'danger') {
+          const dangerAction = result(
+            await select({
+              message: 'Subject > Danger zone',
+              options: [
+                { value: 'archive_subject', label: 'Archive subject' },
+                {
+                  value: 'delete_subject',
+                  label: 'Permanently delete subject',
+                  hint: 'force + exact name',
+                },
+                { value: 'archive_project', label: 'Archive project' },
+                {
+                  value: 'delete_project',
+                  label: 'Permanently delete project',
+                  hint: 'force + exact name',
+                },
+                { value: 'back', label: 'Back' },
+              ],
+            }),
+            'Danger menu cancelled',
+          );
+          if (dangerAction === 'archive_subject') {
+            const confirm = result(
+              await select({
+                message: 'Archive this subject?',
+                options: [
+                  { value: 'yes', label: 'Yes' },
+                  { value: 'no', label: 'No' },
+                ],
+              }),
+              'Archive cancelled',
+            );
+            if (confirm === 'yes') {
+              await safe(async () => {
+                await archiveSubject(ctx.uow, subject!.id);
+                print('Subject archived.');
+                const nextConfig = readGlobalConfig(ctx.appDir);
+                const { activeSubject: _activeSubject, ...withoutSubject } = nextConfig;
+                writeGlobalConfig(withoutSubject, ctx.appDir);
+                subject = undefined;
+                screen = 'project';
+              });
+            }
+          } else if (dangerAction === 'delete_subject') {
+            const exact = result(
+              await text({
+                message: `Type the exact subject name (${subject.name}) to permanently delete:`,
+              }),
+              'Permanent deletion cancelled',
+            );
+            if (exact === subject.name) {
+              await safe(async () => {
+                await permanentlyDeleteSubject(ctx.uow, subject!.id, true);
+                print('Subject permanently deleted.');
+                const nextConfig = readGlobalConfig(ctx.appDir);
+                const { activeSubject: _activeSubject, ...withoutSubject } = nextConfig;
+                writeGlobalConfig(withoutSubject, ctx.appDir);
+                subject = undefined;
+                screen = 'project';
+              });
+            } else if (exact !== CANCEL) {
+              print('Exact name did not match; nothing was deleted.');
+            }
+          } else if (dangerAction === 'archive_project') {
+            const confirm = result(
+              await select({
+                message: 'Archive this project?',
+                options: [
+                  { value: 'yes', label: 'Yes' },
+                  { value: 'no', label: 'No' },
+                ],
+              }),
+              'Archive cancelled',
+            );
+            if (confirm === 'yes') {
+              await safe(async () => {
+                await archiveProject(ctx.uow, project!.id);
+                print('Project archived.');
+                const nextConfig = readGlobalConfig(ctx.appDir);
+                const {
+                  activeProject: _activeProject,
+                  activeSubject: _activeSubject,
+                  ...withoutContext
+                } = nextConfig;
+                writeGlobalConfig(withoutContext, ctx.appDir);
+                screen = 'home';
+                project = undefined;
+                subject = undefined;
+              });
+            }
+          } else if (dangerAction === 'delete_project') {
+            const exact = result(
+              await text({
+                message: `Type the exact project name (${project.name}) to permanently delete:`,
+              }),
+              'Permanent deletion cancelled',
+            );
+            if (exact === project.name) {
+              await safe(async () => {
+                await permanentlyDeleteProject(ctx.uow, project!.id, true);
+                print('Project permanently deleted.');
+                const nextConfig = readGlobalConfig(ctx.appDir);
+                const {
+                  activeProject: _activeProject,
+                  activeSubject: _activeSubject,
+                  ...withoutContext
+                } = nextConfig;
+                writeGlobalConfig(withoutContext, ctx.appDir);
+                screen = 'home';
+                project = undefined;
+                subject = undefined;
+              });
+            } else if (exact !== CANCEL) {
+              print('Exact name did not match; nothing was deleted.');
+            }
+          }
+          continue;
+        }
         if (action === 'add') {
           const currentTicket = subjectTicket;
           if (!currentTicket) continue;
@@ -680,7 +951,7 @@ export async function tui(ctx: AppContext): Promise<void> {
         if (action === 'intake') {
           const currentTicket = subjectTicket;
           if (!currentTicket) continue;
-          await safe(() => intakeEvidence(ctx, selectedProject.id, currentTicket.id));
+          await safe(() => intakeEvidence(ctx, selectedProject.id, currentTicket.id, env));
           continue;
         }
         if (action === 'open') {
@@ -928,7 +1199,7 @@ export async function tui(ctx: AppContext): Promise<void> {
           continue;
         }
         if (selectedId === '__intake__') {
-          await safe(() => intakeEvidence(ctx, selectedProject.id, currentSubjectTicket.id));
+          await safe(() => intakeEvidence(ctx, selectedProject.id, currentSubjectTicket.id, env));
           continue;
         }
         const item = rows.find(({ item: candidate }) => candidate.id === selectedId)?.item;

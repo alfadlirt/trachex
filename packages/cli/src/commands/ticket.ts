@@ -5,6 +5,7 @@ import { ingestFile } from '@trachex/storage-sqlite';
 import { buildRunAgent } from '../agent-wiring.ts';
 import type { AppContext } from '../app.ts';
 import { print, printJson } from '../io.ts';
+import { resolveSubject } from '../lib/subject.ts';
 
 const CONTEXT_TICKET_KEY = '__context__';
 
@@ -54,6 +55,7 @@ export async function ticketNew(
   args: {
     key: string;
     project: string;
+    document?: string;
     fsd?: string;
     note?: string;
     fixture?: string;
@@ -63,7 +65,13 @@ export async function ticketNew(
   if (!project) {
     throw new NotFoundError('project', args.project);
   }
-  const content = args.fsd ? readFileSync(args.fsd, 'utf8') : (args.note ?? '');
+  if (args.document !== undefined && args.fsd !== undefined) {
+    throw new Error(
+      'ticket new accepts only one document input: --docs/--document or legacy --fsd',
+    );
+  }
+  const documentPath = args.document ?? args.fsd;
+  const content = documentPath ? readFileSync(documentPath, 'utf8') : (args.note ?? '');
   const ticket = await createTicket(ctx.uow, {
     projectId: project.id,
     key: args.key,
@@ -80,9 +88,9 @@ export async function ticketNew(
       appDir: ctx.appDir,
       projectId: project.id,
       ticketId: ticket.id,
-      type: args.fsd ? 'fsd' : ('manual' as SourceType),
-      relPath: args.fsd ?? 'note',
-      contentKind: args.fsd ? 'markdown' : 'text',
+      type: documentPath ? 'document' : ('manual' as SourceType),
+      relPath: documentPath ?? 'note',
+      contentKind: documentPath ? 'markdown' : 'text',
       content,
     },
   );
@@ -94,6 +102,70 @@ export async function ticketNew(
       kind: result.proposal.kind,
       status: result.proposal.status,
     },
+  });
+}
+
+export async function ticketAddDocument(
+  ctx: AppContext,
+  args: { key: string; project: string; document: string; fixture?: string },
+) {
+  const project = await ctx.uow.projects.findBySlug(args.project);
+  if (!project) throw new NotFoundError('project', args.project);
+  const ticket = await ctx.uow.tickets.findByProjectAndKey(project.id, args.key);
+  if (!ticket) throw new NotFoundError('ticket', args.key);
+
+  const runAgent = buildRunAgent({
+    search: ctx.uow.search,
+    ...(args.fixture !== undefined ? { fixturePath: args.fixture } : {}),
+  });
+  const result = await runExtraction(
+    ctx.uow,
+    { runAgent },
+    {
+      appDir: ctx.appDir,
+      projectId: project.id,
+      ticketId: ticket.id,
+      type: 'document',
+      relPath: args.document,
+      contentKind: 'markdown',
+      content: readFileSync(args.document, 'utf8'),
+    },
+  );
+  printJson({
+    ticket: { id: ticket.id, key: ticket.key },
+    source: result.source,
+    proposal: { id: result.proposal.id, kind: result.proposal.kind, status: result.proposal.status },
+  });
+}
+
+export async function subjectAddDocument(
+  ctx: AppContext,
+  args: { subject: string; project?: string; document: string; fixture?: string },
+) {
+  const subject = await resolveSubject(ctx.uow, args.subject, args.project);
+  const ticket = await ctx.uow.tickets.findById(subject.id);
+  if (!ticket) throw new NotFoundError('ticket', subject.id);
+  const runAgent = buildRunAgent({
+    search: ctx.uow.search,
+    ...(args.fixture !== undefined ? { fixturePath: args.fixture } : {}),
+  });
+  const result = await runExtraction(
+    ctx.uow,
+    { runAgent },
+    {
+      appDir: ctx.appDir,
+      projectId: subject.projectId,
+      ticketId: ticket.id,
+      type: 'document',
+      relPath: args.document,
+      contentKind: 'markdown',
+      content: readFileSync(args.document, 'utf8'),
+    },
+  );
+  printJson({
+    subject: { id: subject.id, name: subject.name },
+    source: result.source,
+    proposal: { id: result.proposal.id, kind: result.proposal.kind, status: result.proposal.status },
   });
 }
 

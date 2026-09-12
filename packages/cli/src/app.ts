@@ -1,6 +1,6 @@
 import { mkdirSync } from 'node:fs';
 import type { UnitOfWork } from '@trachex/domain';
-import { trachexAppDir } from '@trachex/shared';
+import { loadTrachexEnv, trachexAppDir } from '@trachex/shared';
 import { migrate, openDatabase, SqliteUnitOfWork } from '@trachex/storage-sqlite';
 
 export interface AppContext {
@@ -9,9 +9,11 @@ export interface AppContext {
   uow: UnitOfWork;
 }
 
-export function openApp(appDir = trachexAppDir()): AppContext {
-  mkdirSync(appDir, { recursive: true });
-  const db = openDatabase({ path: `${appDir}/trachex.db` });
+export function openApp(appDir?: string, env: NodeJS.ProcessEnv = process.env): AppContext {
+  loadTrachexEnv(env);
+  const resolvedAppDir = appDir ?? trachexAppDir(env);
+  mkdirSync(resolvedAppDir, { recursive: true });
+  const db = openDatabase({ path: `${resolvedAppDir}/trachex.db` });
   migrate(db);
-  return { appDir, db, uow: new SqliteUnitOfWork(db) };
+  return { appDir: resolvedAppDir, db, uow: new SqliteUnitOfWork(db) };
 }

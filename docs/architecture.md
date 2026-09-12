@@ -101,7 +101,7 @@ The published `trachex` package composes the CLI, API, MCP server, domain, stora
 
 - `Ticket`: project ID, ticket key unique within project, title, description, timestamps.
 - `Source`: source type, attribution, source event time, ingestion time, immutable snapshot path/hash, source location metadata.
-- Supported source types: `fsd`, `brd`, `chat`, `meeting`, `clarification`, `uat`, `manual`, `context`.
+- Supported source types: `document`, `fsd` (legacy), `brd`, `chat`, `meeting`, `clarification`, `uat`, `manual`, `context`.
 
 ### Requirements
 
