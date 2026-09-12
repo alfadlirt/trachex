@@ -4,9 +4,9 @@ export const impactKindSchema = z.enum(['service', 'api', 'page']);
 
 export const requirementDraftSchema = z.object({
   title: z.string().min(1),
-  description: z.string().optional(),
-  sourceLocation: z.string().optional(),
-  parentLabel: z.string().optional(),
+  description: z.string().nullish().default(null),
+  sourceLocation: z.string().nullish().default(null),
+  parentLabel: z.string().nullish().default(null),
   impacts: z
     .array(
       z.object({
@@ -14,9 +14,10 @@ export const requirementDraftSchema = z.object({
         value: z.string().min(1),
       }),
     )
-    .optional(),
-  scenarios: z.array(z.string().min(1)).optional(),
-  supersedes: z.array(z.string().min(1)).optional(),
+    .nullish()
+    .default(null),
+  scenarios: z.array(z.string().min(1)).nullish().default(null),
+  supersedes: z.array(z.string().min(1)).nullish().default(null),
 });
 
 export const extractionOutputSchema = z.object({
@@ -34,7 +35,24 @@ export const proposalOutputSchema = z.discriminatedUnion('kind', [
   reconciliationOutputSchema,
 ]);
 
-export type ExtractionOutput = z.infer<typeof extractionOutputSchema>;
-export type ReconciliationOutput = z.infer<typeof reconciliationOutputSchema>;
-export type ProposalOutput = z.infer<typeof proposalOutputSchema>;
-export type RequirementDraft = z.infer<typeof requirementDraftSchema>;
+export interface RequirementDraft {
+  title: string;
+  description?: string | null;
+  sourceLocation?: string | null;
+  parentLabel?: string | null;
+  impacts?: Array<{ kind: z.infer<typeof impactKindSchema>; value: string }> | null;
+  scenarios?: string[] | null;
+  supersedes?: string[] | null;
+}
+
+export interface ExtractionOutput {
+  kind: 'extraction';
+  requirements: RequirementDraft[];
+}
+
+export interface ReconciliationOutput {
+  kind: 'reconciliation';
+  create: RequirementDraft[];
+}
+
+export type ProposalOutput = ExtractionOutput | ReconciliationOutput;
