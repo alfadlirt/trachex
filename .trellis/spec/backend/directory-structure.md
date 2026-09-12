@@ -111,6 +111,13 @@ positional, not a subcommand.
   schema rejects (`INVALID_INPUT`).
 - Results: `{ content: [{ type: 'text', text: JSON.stringify(payload) }] }`;
   errors: `{ isError: true, content: [{ type: 'text', text: JSON.stringify({ code, message }) }] }`.
+- The stdio runtime must remain pending after `server.connect(transport)` until
+  stdin closes or the transport/server reports a fatal error. The composition
+  binary calls `process.exit(code)` after the CLI promise resolves, so returning
+  immediately disconnects external MCP clients.
+- The runtime closes the SQLite handle in `finally` and routes startup
+  diagnostics to stderr. stdout is reserved exclusively for MCP JSON-RPC
+  frames.
 - Export serializers live in `packages/domain/src/export.ts` (not cli) so
   cli/mcp/api share them without a dependency cycle.
 

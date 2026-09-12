@@ -22,6 +22,9 @@ canonical data: the pipeline writes an `ErrorRecord` (via
 
 - Domain services throw typed errors; callers (CLI/MCP/API) map them to exit
   codes / structured responses.
+- MCP startup errors are process errors and must be written to stderr; stdout
+  is the MCP JSON-RPC channel and must not contain human-readable or JSON error
+  envelopes before a valid protocol session exists.
 - The agent layer (`runExtraction`/`runReconciliation`) catches model failures,
   records an error row, and rethrows `PipelineError`. The already-created
   `Source` row is kept; no requirement rows are touched.
@@ -49,3 +52,6 @@ canonical data: the pipeline writes an `ErrorRecord` (via
   and rethrow a typed `PipelineError` so failures are auditable.
 - **Holding a DB transaction across a model call**: never wrap an LLM run in a
   `db.transaction`; keep transactions short and per-repository.
+- **Returning from the stdio runtime after `server.connect()`**: the
+  composition executable then exits cleanly and the MCP host reports a
+  disconnected server. Keep the runtime pending until stdin/transport close.
