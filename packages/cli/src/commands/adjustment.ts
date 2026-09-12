@@ -17,6 +17,17 @@ export async function adjustment(
   },
 ) {
   const { subject, ticket } = await resolveSubjectTicket(ctx.uow, args.subjectId, args.project);
+  const currentRequirements = JSON.stringify(
+    (await ctx.uow.requirements.listByTicket(ticket.id)).map((requirement) => ({
+      id: requirement.id,
+      title: requirement.title,
+      description: requirement.description,
+      lifecycleStatus: requirement.lifecycleStatus,
+      devStatus: requirement.devStatus,
+    })),
+    null,
+    2,
+  );
   const runAgent = buildRunAgent({
     search: ctx.uow.search,
     ...(args.fixture !== undefined ? { fixturePath: args.fixture } : {}),
@@ -31,6 +42,7 @@ export async function adjustment(
       type: args.source as SourceType,
       ...(args.from !== undefined ? { attribution: args.from } : {}),
       note: args.note,
+      currentRequirements,
       relPath: 'note',
       contentKind: 'text',
       content: args.note,

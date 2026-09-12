@@ -50,7 +50,7 @@ async function callTool(ctx: ToolContext, name: string, input: unknown): Promise
   return tool.handler(ctx, parsed);
 }
 
-test('all 11 contract tools are registered', () => {
+test('all contract tools are registered', () => {
   const names = tools.map((t) => t.name);
   for (const expected of [
     'get_checklist',

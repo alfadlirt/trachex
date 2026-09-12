@@ -35,6 +35,7 @@ export interface PipelineInput {
   sourceEventAt?: string;
   location?: string;
   note?: string;
+  currentRequirements?: string;
 }
 
 export async function runExtraction(uow: UnitOfWork, deps: PipelineDeps, input: PipelineInput) {
@@ -58,7 +59,9 @@ export async function runExtraction(uow: UnitOfWork, deps: PipelineDeps, input: 
         sourceType: input.type,
         ...(input.attribution !== undefined ? { attribution: input.attribution } : {}),
       }),
-      userContent: input.content,
+      userContent: input.currentRequirements
+        ? `${input.currentRequirements}\n\nAdjustment source:\n${input.content}`
+        : input.content,
       outputSchema: extractionOutputSchema,
     });
     const proposal = await createProposal(uow, {
@@ -97,7 +100,9 @@ export async function runReconciliation(uow: UnitOfWork, deps: PipelineDeps, inp
         sourceType: input.type,
         ...(input.attribution !== undefined ? { attribution: input.attribution } : {}),
       }),
-      userContent: input.content,
+      userContent: input.currentRequirements
+        ? `${input.currentRequirements}\n\nAdjustment source:\n${input.content}`
+        : input.content,
       outputSchema: reconciliationOutputSchema,
     });
     const proposal = await createProposal(uow, {
@@ -122,8 +127,15 @@ function normalizeOutput(output: unknown): DomainProposalOutput {
     create?: Array<Record<string, unknown>>;
   };
   const cleanDraft = (draft: Record<string, unknown>) => {
-    const clean: Record<string, unknown> = { title: draft['title'] };
-    for (const key of ['description', 'sourceLocation', 'parentLabel', 'impacts', 'scenarios', 'supersedes']) {
+    const clean: Record<string, unknown> = { title: draft.title };
+    for (const key of [
+      'description',
+      'sourceLocation',
+      'parentLabel',
+      'impacts',
+      'scenarios',
+      'supersedes',
+    ]) {
       const value = draft[key];
       if (value !== null && value !== undefined) {
         clean[key] = value;
@@ -132,10 +144,16 @@ function normalizeOutput(output: unknown): DomainProposalOutput {
     return clean;
   };
   if (raw.kind === 'extraction' && Array.isArray(raw.requirements)) {
-    return { kind: 'extraction', requirements: raw.requirements.map(cleanDraft) } as unknown as DomainProposalOutput;
+    return {
+      kind: 'extraction',
+      requirements: raw.requirements.map(cleanDraft),
+    } as unknown as DomainProposalOutput;
   }
   if (raw.kind === 'reconciliation' && Array.isArray(raw.create)) {
-    return { kind: 'reconciliation', create: raw.create.map(cleanDraft) } as unknown as DomainProposalOutput;
+    return {
+      kind: 'reconciliation',
+      create: raw.create.map(cleanDraft),
+    } as unknown as DomainProposalOutput;
   }
   return raw as unknown as DomainProposalOutput;
 }
@@ -168,7 +186,7 @@ function inspectProviderError(error: unknown) {
     }
     return undefined;
   };
-  const cause = record['cause'];
+  const cause = record.cause;
   return {
     name: error.name,
     message: error.message,

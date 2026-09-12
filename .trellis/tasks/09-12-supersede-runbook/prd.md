@@ -14,9 +14,11 @@ Rewrite `demo-checklist-step-by-step.md` steps 9–12 as copy-pasteable commands
 
 ## Requirements
 
-- Step 9 offers the deterministic `--fixture` reconciliation path as the primary flow.
+- Step 9 demonstrates the real provider/LLM reconciliation path as the primary agentic flow; because this core clarification explicitly changes the original requirement's meaning, the expected proposal includes its supersede target. `--fixture` remains a deterministic eval/demo fallback.
 - Each assert step pastes expected output (proposal JSON with `supersedes`, `checklist --json` fields: `lifecycleStatus`, `supersededByTitle`, source attribution).
 - Repair branch: if `view.superseded` is empty, inspect proposal output, re-run with explicit replacement note or `proposal edit`, then approve.
+- Review branch: inspect the pending proposal, edit its complete output if needed, then approve only with explicit human confirmation.
+- Show that inspecting or editing a proposal does not change the active checklist; approval is the only state-changing step.
 - Assertions mirror the supersede-eval cases 1:1 so demo and eval cannot drift.
 - Add MCP/AI questions for drift history, superseded count, source/author/date of each change, and current-vs-original meaning.
 - Define an explicit uncertainty response: when the stored checklist, source, relationship, or audit evidence cannot confirm an answer, respond that it cannot be confirmed, advise asking the BA immediately, and instruct the user to add the clarification with `subject add-doc` before relying on the answer.
@@ -31,6 +33,9 @@ Rewrite `demo-checklist-step-by-step.md` steps 9–12 as copy-pasteable commands
 - [ ] The runbook demonstrates source/author/date attribution for each confirmed adjustment and identifies the superseded replacement chain.
 - [ ] The runbook contains the exact escalation response for missing or contradictory evidence: "We can't confirm that from the available context. Please ask your BA immediately, then add the clarification with `subject add-doc` before relying on this answer."
 - [ ] The AI/MCP prompt pack and eval expectations reject unsupported answers and require the escalation response when evidence is insufficient.
+- [ ] The runbook shows the LLM proposing supersession, a human reviewing/editing the plan, and explicit confirmation applying it.
+- [ ] The runbook demonstrates that an unconfirmed proposal does not supersede anything.
+- [ ] The runbook makes clear that "expected supersede" describes the LLM recommendation for this evidence-rich scenario, not automatic application; human review and explicit confirmation remain required.
 
 ## Out Of Scope
 

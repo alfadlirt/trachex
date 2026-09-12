@@ -37,7 +37,7 @@ async function makeCtx(): Promise<{
 }
 
 test('tool registry exposes all contract tools', () => {
-  assert.equal(tools.length, 12);
+  assert.equal(tools.length, 14);
   const names = tools.map((t) => t.name);
   for (const expected of [
     'get_checklist',
@@ -47,6 +47,8 @@ test('tool registry exposes all contract tools', () => {
     'get_requirement',
     'create_ticket',
     'add_adjustment',
+    'review_proposal',
+    'edit_proposal',
     'approve_proposal',
     'reject_proposal',
     'check_item',

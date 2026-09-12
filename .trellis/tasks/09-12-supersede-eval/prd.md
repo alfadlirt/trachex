@@ -2,7 +2,7 @@
 
 ## Goal
 
-Provider-free evals that lock supersede mechanics so LLM variance can never silently pass.
+Provider-free evals that lock supersede mechanics and the human-controlled agentic proposal lifecycle so LLM variance can never silently mutate canonical state.
 
 ## Confirmed Facts
 
@@ -16,6 +16,11 @@ Provider-free evals that lock supersede mechanics so LLM variance can never sile
 - Assert: exactly 1 superseded (= req-1), 1 `supersedes` relation (new → req-1), req-1 check audit preserved, replacement active + unchecked with clarification source + attribution, view groups exclude req-1, `superseded[]` has 1 entry.
 - Second case repeats with a UAT source (idempotency item).
 - Both cases run provider-free via the fixture/harness patch mechanism.
+- Assert the reconciliation result is a pending proposal, not an applied checklist mutation.
+- For the core timezone clarification, assert the LLM output identifies the original seven-day requirement in `supersedes`; an output that only adds requirements is a failed reasoning result for this scenario.
+- Assert a reviewer can edit the proposal output, including `supersedes`, before approval.
+- Assert approval requires explicit confirmation in MCP and that missing confirmation leaves requirements unchanged.
+- Assert rejection leaves requirements, relationships, and audits unchanged.
 - Add an evidence-bound answer case: the agent reports initial-to-current drift counts, superseded replacement source/attribution/date, and refuses to answer an unsupported cause or count.
 - Assert the refusal response tells the user to ask the BA immediately and add the clarification with `subject add-doc`.
 
@@ -27,6 +32,8 @@ Provider-free evals that lock supersede mechanics so LLM variance can never sile
 - [ ] `pnpm eval` or the agent test command runs both cases green.
 - [ ] Drift answers are derived from stored requirements, relationships, sources, and audits rather than model invention.
 - [ ] Missing evidence produces the exact escalation guidance instead of an inferred answer.
+- [ ] The human gate fails closed: no confirmation means no supersede, no additions, and no checklist mutation.
+- [ ] Edited proposal content, not the original model output, is what approval applies.
 
 ## Out Of Scope
 

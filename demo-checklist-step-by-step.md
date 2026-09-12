@@ -135,87 +135,100 @@ pnpm run trachex status \
   --json
 ```
 
-## 9. Add A Clarification Adjustment (Deterministic Primary Path)
+## 9. Ask Trachex To Reconcile A Clarification
 
-The adjustment is on the single `Checkout`/`BILL-101` ticket. Free-text notes
-do not force an agent to emit `supersedes`, so use the provider-free fixture.
+The adjustment is on the single `Checkout`/`BILL-101` ticket. This is the real
+agentic path: Trachex gives the current checklist and the clarification to the
+LLM, and the LLM returns a pending reconciliation plan. Nothing in the active
+checklist changes yet.
 
 ```bash
-OLD_ID=$(pnpm run trachex subject checklist "Checkout" --project subscription-billing --json \
-  | jq -r '.groups[].items[] | select(.title == "Start a seven-day free trial") | .id')
-test -n "$OLD_ID" && test "$OLD_ID" != "null"
-jq --arg target "$OLD_ID" '.create[0].supersedes = [$target]' \
-  fixtures/subscription-billing-adjustment/reconciliation-clarification.json \
-  > /tmp/trachex-clarification-reconciliation.json
 pnpm run trachex adjustment "Checkout" \
   --project subscription-billing \
   --source clarification \
   --from "Maya Chen, Product Manager" \
-  --note "Trial conversion must use the account timezone. Add a 24-hour grace period for failed payment retries. The previous requirement did not cover timezone boundaries or cancellation during the grace period." \
-  --fixture /tmp/trachex-clarification-reconciliation.json
+  --note "Trial conversion must use the account timezone. Add a 24-hour grace period for failed payment retries. The previous requirement did not cover timezone boundaries or cancellation during the grace period."
 ```
 
-Assert the pending proposal JSON before approving:
+The LLM should recognize that the clarification changes the meaning of the
+original seven-day trial requirement. Its pending proposal should therefore
+contain:
+
+- A replacement for the original trial-conversion requirement, linked through
+  `supersedes`.
+- The new 24-hour payment grace-period requirement.
+- Source type `clarification`.
+- Attribution `Maya Chen, Product Manager`.
+- The adjustment note as the source cause.
+- Impacts and test scenarios for human review.
+
+Find the pending proposal ID in the normal Trachex listing, then review it with
+Trachex. Do not extract requirement IDs or proposal fields with shell tools.
 
 ```bash
-PROPOSAL_ID=$(pnpm run trachex proposal list --project subscription-billing \
-  | jq -r '[.[] | select(.proposal.kind == "reconciliation" and .proposal.status == "pending")][-1].proposal.id')
-pnpm run trachex proposal list --project subscription-billing \
-  | jq --arg id "$PROPOSAL_ID" '.[] | select(.proposal.id == $id) | .versions[-1].editedOutput | fromjson | {kind, supersedes: [.create[].supersedes[]]}'
+pnpm run trachex proposal list \
+  --project subscription-billing
+
+pnpm run trachex proposal review <pending-clarification-proposal-id> \
+  --project subscription-billing
 ```
 
-Expected output includes `{"kind":"reconciliation","supersedes":["<OLD_ID>"]}`.
-Approve only after that assertion passes:
+The review result is the agent's recommendation. It should explain which
+existing requirement is superseded, what replaces it, what new work is added,
+and why the clarification caused the change. Reviewing the proposal does not
+change the checklist.
+
+If the proposal does not recommend superseding the original trial requirement,
+do not approve it just to complete the demo. Ask Trachex to rerun the
+adjustment with the same clarification or leave it pending and ask the BA for
+clarification. The LLM must make the recommendation from the source and
+current checklist; the runbook must not manufacture the supersede decision.
+
+## 10. Human Review, Confirmation, And Superseded History
+
+The human owns the final plan. Before approval, review the complete proposal:
+
+- Confirm the original seven-day behavior is actually being replaced.
+- Confirm the replacement uses the customer's local timezone.
+- Confirm the 24-hour grace-period item is separate new work.
+- Confirm the source, author, adjustment note, impacts, and scenarios.
+- Edit the proposal if any title, description, scenario, impact, or supersede
+  decision is wrong.
+
+If the proposal needs changes, create a complete edited proposal JSON and let
+Trachex store it as a new pending version:
 
 ```bash
-pnpm run trachex proposal approve "$PROPOSAL_ID" \
+pnpm run trachex proposal edit <pending-clarification-proposal-id> \
+  --project subscription-billing \
+  --output /path/to/reviewed-clarification-plan.json
+```
+
+Review the proposal again after editing. The active checklist is still
+unchanged. Only explicit human confirmation applies the plan:
+
+```bash
+pnpm run trachex proposal approve <pending-clarification-proposal-id> \
   --project subscription-billing \
   --yes
 ```
 
-## 10. Assert Superseded Requirement History
+Now inspect the normal human-readable checklist. No JSON filtering or manual
+requirement lookup is needed:
 
 ```bash
 pnpm run trachex subject checklist "Checkout" \
-  --project subscription-billing \
-  --json > /tmp/trachex-checklist-after-clarification.json
-jq -e --arg old "$OLD_ID" '
-  (.superseded | length) == 1 and .[0].item.id == $old and
-  .[0].item.lifecycleStatus == "superseded" and
-  .[0].supersededByTitle == "Convert at the end of the local seventh day" and
-  .[0].replacement.source.type == "clarification" and
-  .[0].replacement.source.attribution == "Maya Chen, Product Manager" and
-  .[0].replacement.source.location != null and .[0].replacement.source.note != null and
-  .[0].replacement.source.ingestedAt != null and
-  .[0].replacement.devStatus == "unchecked"
-' /tmp/trachex-checklist-after-clarification.json
+  --project subscription-billing
 ```
 
-Expected result is `true`. Also check the JSON fields `lifecycleStatus`,
-`supersededByTitle`, `oldAudits`, and `replacement.source` (type, attribution,
-location, and note). The replacement must be active/unchecked and unrelated
-completed items must remain checked.
+The `# Superseded` section should show the original checked requirement with its
+old completion audit, the replacement requirement, and the clarification
+source/attribution/note. The active section should show the replacement and the
+new grace-period work as unchecked. Unrelated completed work remains checked.
 
-### Repair branch: missing `supersedes`
-
-If `.superseded` is empty, do not approve. Inspect the proposal output, then
-rerun the deterministic fixture with an explicit replacement note (or use a
-proposal editor, if one is available, to set `create[0].supersedes` to
-`$OLD_ID`). Refresh `PROPOSAL_ID`, rerun the assertion, then approve:
-
-```bash
-pnpm run trachex proposal list --project subscription-billing \
-  | jq --arg id "$PROPOSAL_ID" '.[] | select(.proposal.id == $id) | .versions[-1]'
-pnpm run trachex adjustment "Checkout" --project subscription-billing \
-  --source clarification --from "Maya Chen, Product Manager" \
-  --note "Explicit replacement: supersede requirement $OLD_ID (Start a seven-day free trial) with local seventh-day conversion; add a 24-hour grace period." \
-  --fixture /tmp/trachex-clarification-reconciliation.json
-PROPOSAL_ID=$(pnpm run trachex proposal list --project subscription-billing \
-  | jq -r '[.[] | select(.proposal.kind == "reconciliation" and .proposal.status == "pending")][-1].proposal.id')
-```
-
-Approve the repaired pending proposal only after its JSON contains
-`supersedes: ["$OLD_ID"]`. Repeat step 10; it must show `# Superseded`.
+If the human does not approve, or rejects the proposal, the active checklist
+must remain exactly as it was before the adjustment. Deterministic fixtures and
+field-level assertions belong to automated evals, not this user-facing demo.
 
 ## 11. Add UAT Feedback
 
@@ -224,11 +237,12 @@ pnpm run trachex adjustment "Checkout" \
   --project subscription-billing \
   --source uat \
   --from "UAT Team" \
-  --note "At the user's local midnight, trial conversion can select the wrong billing date. Failed payment retry behavior may create duplicate charges. Add coverage for timezone boundaries, retry idempotency, and cancellation during the grace period." \
-  --fixture fixtures/subscription-billing-adjustment/reconciliation-uat.json
+  --note "At the user's local midnight, trial conversion can select the wrong billing date. Failed payment retry behavior may create duplicate charges. Add coverage for timezone boundaries, retry idempotency, and cancellation during the grace period."
 ```
 
-Review and assert the new proposal, then approve:
+Review the pending proposal, optionally edit its complete output, and approve
+only with explicit human confirmation. The active checklist remains unchanged
+until approval:
 
 ```bash
 pnpm run trachex proposal list \
@@ -236,11 +250,11 @@ pnpm run trachex proposal list \
 ```
 
 ```bash
-PROPOSAL_ID=$(pnpm run trachex proposal list --project subscription-billing \
-  | jq -r '[.[] | select(.proposal.kind == "reconciliation" and .proposal.status == "pending")][-1].proposal.id')
-pnpm run trachex proposal list --project subscription-billing \
-  | jq -e --arg id "$PROPOSAL_ID" '.[] | select(.proposal.id == $id) | .versions[-1].editedOutput | fromjson | (.kind == "reconciliation" and (.create | length) == 2)'
-pnpm run trachex proposal approve "$PROPOSAL_ID" \
+pnpm run trachex proposal list \
+  --project subscription-billing
+pnpm run trachex proposal review <pending-uat-proposal-id> \
+  --project subscription-billing
+pnpm run trachex proposal approve <pending-uat-proposal-id> \
   --project subscription-billing \
   --yes
 ```
@@ -275,6 +289,23 @@ and audit evidence from inference. If any required evidence is missing or
 contradictory, use this exact response:
 
 > We can't confirm that from the available context. Please ask your BA immediately, then add the clarification with `subject add-doc` before relying on this answer.
+
+Ask MCP/your AI agent these questions, which must be answered only from the
+single-ticket checklist, sources, relationships, audits, and documents:
+
+```text
+How many requirements were in the initial baseline, how many were added by clarification and UAT, how many were superseded, and how many active requirements remain unchecked?
+For every confirmed adjustment, what are the source type, author, date, note, and replacement chain?
+Which requirement is the superseded predecessor, what replaced it, and what completion work is now stale?
+What is the current meaning compared with the original baseline?
+```
+
+The answer must report confirmed evidence and explicitly label unknowns. It must
+not invent a cause, owner, date, or requirement change. If the stored checklist,
+source, relationship, or audit evidence is missing or contradictory, respond
+exactly: **We can't confirm that from the available context. Please ask your BA
+immediately, then add the clarification with `subject add-doc` before relying
+on this answer.**
 
 ## 13. Export The Development Summary
 

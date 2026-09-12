@@ -5,7 +5,10 @@ import {
   buildSubjectBaseline,
   checkRequirement,
   createTicket,
+  editProposal,
+  InvalidOperationError,
   NotFoundError,
+  type ProposalOutput,
   rejectProposal,
   ScopingError,
   type SourceType,
@@ -82,6 +85,17 @@ export const tools: ToolDef[] = [
     handler: async (ctx, input) => {
       const { ticketKey } = input as { ticketKey: string };
       const ticket = await requireTicket(ctx, ticketKey);
+      const currentRequirements = JSON.stringify(
+        (await ctx.uow.requirements.listByTicket(ticket.id)).map((requirement) => ({
+          id: requirement.id,
+          title: requirement.title,
+          description: requirement.description,
+          lifecycleStatus: requirement.lifecycleStatus,
+          devStatus: requirement.devStatus,
+        })),
+        null,
+        2,
+      );
       const checklist = await ctx.uow.requirements.listActiveByTicket(ticket.id);
       return { ticketKey, checklist };
     },
@@ -197,6 +211,17 @@ export const tools: ToolDef[] = [
         note: string;
       };
       const ticket = await requireTicket(ctx, ticketKey);
+      const currentRequirements = JSON.stringify(
+        (await ctx.uow.requirements.listByTicket(ticket.id)).map((requirement) => ({
+          id: requirement.id,
+          title: requirement.title,
+          description: requirement.description,
+          lifecycleStatus: requirement.lifecycleStatus,
+          devStatus: requirement.devStatus,
+        })),
+        null,
+        2,
+      );
       const result = await runReconciliation(
         ctx.uow,
         { runAgent: ctx.runAgent },
@@ -205,8 +230,10 @@ export const tools: ToolDef[] = [
           projectId: ctx.projectId,
           ticketId: ticket.id,
           type: source,
-          ...(attribution !== undefined ? { attribution } : {}),
-          relPath: 'note',
+           ...(attribution !== undefined ? { attribution } : {}),
+           note,
+           currentRequirements,
+           relPath: 'note',
           contentKind: 'text',
           content: note,
         },
@@ -222,11 +249,57 @@ export const tools: ToolDef[] = [
     },
   },
   {
-    name: 'approve_proposal',
-    description: 'Approve a pending proposal, creating or superseding canonical requirements.',
+    name: 'review_proposal',
+    description:
+      'Review a pending proposal, its source evidence, proposed output, and supersede targets. This does not mutate the checklist.',
     inputSchema: z.object({ proposalId: z.string().min(1) }),
     handler: async (ctx, input) => {
       const { proposalId } = input as { proposalId: string };
+      const proposal = await requireScopedProposal(ctx, proposalId);
+      if (proposal.status !== 'pending') {
+        throw new InvalidOperationError('only pending proposals can be reviewed');
+      }
+      const versions = await ctx.uow.proposals.listVersions(proposalId);
+      const latest = versions.at(-1);
+      if (!latest) throw new NotFoundError('proposal version', proposalId);
+      const output = JSON.parse(latest.editedOutput ?? latest.modelOutput) as ProposalOutput;
+      const source = proposal.sourceId ? await ctx.uow.sources.findById(proposal.sourceId) : null;
+      const targets = [];
+      const ids =
+        output.kind === 'reconciliation'
+          ? output.create.flatMap((draft) => draft.supersedes ?? [])
+          : [];
+      for (const id of ids) {
+        const target = await requireScopedRequirement(ctx, id);
+        targets.push(target);
+      }
+      return { proposal, version: latest, source, output, supersedeTargets: targets };
+    },
+  },
+  {
+    name: 'edit_proposal',
+    description:
+      'Store a complete edited proposal output for review. This does not mutate the active checklist.',
+    inputSchema: z.object({
+      proposalId: z.string().min(1),
+      output: z.record(z.string(), z.unknown()),
+    }),
+    handler: async (ctx, input) => {
+      const { proposalId, output } = input as { proposalId: string; output: ProposalOutput };
+      const proposal = await requireScopedProposal(ctx, proposalId);
+      if (proposal.status !== 'pending') {
+        throw new InvalidOperationError('only pending proposals can be edited');
+      }
+      const version = await editProposal(ctx.uow, { proposalId, editedOutput: output });
+      return { proposalId, status: 'pending', version };
+    },
+  },
+  {
+    name: 'approve_proposal',
+    description: 'Approve a pending proposal only after explicit human confirmation.',
+    inputSchema: z.object({ proposalId: z.string().min(1), confirm: z.literal(true) }),
+    handler: async (ctx, input) => {
+      const { proposalId } = input as { proposalId: string; confirm: true };
       await requireScopedProposal(ctx, proposalId);
       await approveProposal(ctx.uow, { proposalId });
       return { proposalId, status: 'approved' };

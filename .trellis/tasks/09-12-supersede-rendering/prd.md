@@ -15,6 +15,7 @@ Each superseded checklist entry shows its cause chain so the reader never needs 
 - Superseded entries show: old title + ID, its check audit (who/when/note), replacement title + ID, replacement source (type, attribution, location, note excerpt), replacement state (active/unchecked).
 - JSON view includes the same fields (`supersededById`, new-item source, old-item audits).
 - The view exposes enough stable evidence for an agent to count baseline requirements, additions, supersessions, active items, and unchecked items without rereading documents.
+- Proposal review output exposes the proposed diff before approval: additions, changed meaning, superseded IDs, source, attribution, note, impacts, and scenarios.
 - Human output keeps the `~~struck~~` convention and adds cause lines beneath.
 - Active-item rendering is unchanged.
 
@@ -24,6 +25,7 @@ Each superseded checklist entry shows its cause chain so the reader never needs 
 - [ ] Human-readable output answers what/when/why/from-whom/replaced-by/stale without extra commands.
 - [ ] Existing view tests updated; no active-item regression.
 - [ ] The JSON contract supports source-backed drift summaries and makes absent evidence distinguishable from an empty value.
+- [ ] A reviewer can distinguish pending proposal state from applied checklist state using stable JSON fields.
 
 ## Out Of Scope
 

@@ -203,6 +203,34 @@ export interface ReconciliationOutput {
 
 export type ProposalOutput = ExtractionOutput | ReconciliationOutput;
 
+function validateProposalOutput(output: ProposalOutput): void {
+  if (!output || (output.kind !== 'extraction' && output.kind !== 'reconciliation')) {
+    throw new InvalidOperationError('proposal output must be an extraction or reconciliation');
+  }
+  const drafts = output.kind === 'extraction' ? output.requirements : output.create;
+  if (!Array.isArray(drafts) || (output.kind === 'extraction' && drafts.length === 0)) {
+    throw new InvalidOperationError('proposal output has an invalid draft list');
+  }
+  for (const draft of drafts) {
+    if (
+      !draft ||
+      typeof draft !== 'object' ||
+      typeof draft.title !== 'string' ||
+      draft.title.trim().length === 0
+    ) {
+      throw new InvalidOperationError('proposal drafts require a non-empty title');
+    }
+    if (draft.supersedes !== undefined && !Array.isArray(draft.supersedes)) {
+      throw new InvalidOperationError('proposal supersedes must be an array of ids');
+    }
+    for (const id of draft.supersedes ?? []) {
+      if (typeof id !== 'string' || id.trim().length === 0) {
+        throw new InvalidOperationError('proposal supersedes targets must be non-empty ids');
+      }
+    }
+  }
+}
+
 export interface CreateProposalInput {
   ticketId: string;
   kind: Proposal['kind'];
@@ -390,6 +418,7 @@ export async function createProposal(
   uow: UnitOfWork,
   input: CreateProposalInput,
 ): Promise<Proposal> {
+  validateProposalOutput(input.output);
   const ticket = await uow.tickets.findById(input.ticketId);
   if (!ticket) {
     throw new NotFoundError('ticket', input.ticketId);
@@ -422,6 +451,7 @@ export async function editProposal(
   uow: UnitOfWork,
   input: { proposalId: string; editedOutput: ProposalOutput },
 ): Promise<ProposalVersion> {
+  validateProposalOutput(input.editedOutput);
   const proposal = await uow.proposals.findById(input.proposalId);
   if (!proposal) {
     throw new NotFoundError('proposal', input.proposalId);
@@ -474,6 +504,22 @@ export async function approveProposal(uow: UnitOfWork, input: ApproveProposalInp
     throw new NotFoundError('ticket', proposal.ticketId);
   }
 
+  // Validate all supersession targets before creating any replacement rows. This
+  // keeps malformed or cross-ticket edited proposals from partially applying.
+  if (output.kind === 'reconciliation') {
+    for (const draft of output.create) {
+      for (const targetId of draft.supersedes ?? []) {
+        const target = await uow.requirements.findById(targetId);
+        if (!target) {
+          throw new InvalidOperationError(`cannot supersede unknown requirement: ${targetId}`);
+        }
+        if (target.ticketId !== ticket.id) {
+          throw new InvalidOperationError('cannot supersede a requirement from another ticket');
+        }
+      }
+    }
+  }
+
   if (output.kind === 'extraction') {
     for (const draft of output.requirements) {
       await createRequirementFromDraft(uow, ticket.projectId, ticket.id, proposal, draft, now);
@@ -490,12 +536,9 @@ export async function approveProposal(uow: UnitOfWork, input: ApproveProposalInp
       );
       for (const targetId of draft.supersedes ?? []) {
         const target = await uow.requirements.findById(targetId);
-        if (!target) {
+        // Targets were checked in the preflight above.
+        if (!target)
           throw new InvalidOperationError(`cannot supersede unknown requirement: ${targetId}`);
-        }
-        if (target.ticketId !== ticket.id) {
-          throw new InvalidOperationError('cannot supersede a requirement from another ticket');
-        }
         const updated: Requirement = { ...target, lifecycleStatus: 'superseded', updatedAt: now };
         await uow.requirements.update(updated);
         await uow.requirements.addRelationship({
