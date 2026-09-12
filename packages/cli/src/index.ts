@@ -886,6 +886,19 @@ export async function runCli(env: CliEnv): Promise<number> {
       printJson({ error: { code: 'PIPELINE', message: error.message } });
       return EXIT_ERROR;
     }
+    if (command === 'mcp') {
+      // stdout belongs exclusively to the MCP JSON-RPC stream. Startup
+      // diagnostics must go to stderr so hosts can still parse the stream.
+      process.stderr.write(
+        `${JSON.stringify({
+          error: {
+            code: 'INTERNAL',
+            message: error instanceof Error ? error.message : String(error),
+          },
+        })}\n`,
+      );
+      return EXIT_ERROR;
+    }
     printJson({
       error: {
         code: 'INTERNAL',

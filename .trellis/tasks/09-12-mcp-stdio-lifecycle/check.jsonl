@@ -1,0 +1,5 @@
+
+{"file":".trellis/spec/backend/directory-structure.md","reason":"Check that the final runtime remains within the established packages/mcp and packages/trachex boundaries and does not introduce an unsupported transport."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Check startup, transport, and tool error behavior against project-wide typed/structured error conventions."}
+{"file":".trellis/tasks/archive/2026-09/09-07-phase-5-mcp/design.md","reason":"Review final behavior against the existing MCP tool contract, project scoping, confirmation, and serialization requirements."}
+{"file":".trellis/tasks/09-12-mcp-stdio-lifecycle/design.md","reason":"Review the lifecycle boundary, cleanup, compatibility, and process-level verification design for completeness."}

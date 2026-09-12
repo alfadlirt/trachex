@@ -1,0 +1,5 @@
+
+{"file":".trellis/spec/backend/directory-structure.md","reason":"Documents the current MCP package layout, StdioServerTransport usage, and composition binary lifecycle that the implementation must preserve or safely adjust."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Defines structured error propagation and the requirement that transport diagnostics must not bypass MCP response conventions."}
+{"file":".trellis/tasks/archive/2026-09/09-07-phase-5-mcp/design.md","reason":"Contains the original MCP contract, scoping, tool, transport, and test design that this lifecycle fix must not regress."}
+{"file":".trellis/tasks/archive/2026-09/09-07-phase-5-mcp/implement.md","reason":"Records the original MCP implementation order and validation expectations."}
