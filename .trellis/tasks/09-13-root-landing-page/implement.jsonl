@@ -1,0 +1,7 @@
+
+{"file":".trellis/spec/frontend/index.md","reason":"Frontend layer index and project-specific conventions."}
+{"file":".trellis/spec/frontend/directory-structure.md","reason":"Dashboard route and component organization, naming, and button conventions."}
+{"file":"copy.md","reason":"Approved product claims, terminology, and source copy for the landing page."}
+{"file":"apps/dashboard/src/routes/index.tsx","reason":"Current root redirect to replace with the landing page."}
+{"file":"apps/dashboard/src/routes/__root.tsx","reason":"Existing dashboard shell and route outlet behavior."}
+{"file":"apps/dashboard/src/index.css","reason":"Existing Tailwind v4 stylesheet entry for landing-page styles."}

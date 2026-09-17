@@ -1,1 +1,51 @@
 @import "tailwindcss";
+
+html {
+  background-color: #09090b;
+}
+
+.landing :focus-visible {
+  outline: 2px solid #ffd230;
+  outline-offset: 2px;
+}
+
+.landing-rise {
+  animation: landing-rise 500ms ease-out both;
+}
+
+.landing-select {
+  animation: landing-select 180ms ease-out;
+}
+
+@keyframes landing-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes landing-select {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+dialog::backdrop {
+  background: rgb(0 0 0 / 0.6);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-rise,
+  .landing-select {
+    animation: none;
+  }
+}

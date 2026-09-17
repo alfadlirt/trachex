@@ -1,0 +1,6 @@
+
+{"file":".trellis/spec/frontend/index.md","reason":"Frontend verification scope."}
+{"file":".trellis/spec/frontend/directory-structure.md","reason":"Frontend route and button conventions to check."}
+{"file":".trellis/tasks/09-13-root-landing-page/prd.md","reason":"Acceptance criteria for functional, visual, accessibility, and content checks."}
+{"file":".trellis/tasks/09-13-root-landing-page/design.md","reason":"Technical contracts and compatibility constraints to verify."}
+{"file":"copy.md","reason":"Check copy and product claims against the supplied source."}
