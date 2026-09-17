@@ -1,0 +1,67 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      NODE_ENV: production
+      TRACHEX_HOME: /data/trachex
+      TRACHEX_DASHBOARD_HOST: 0.0.0.0
+      TRACHEX_DASHBOARD_PORT: 8000
+      TRACHEX_PROVIDER: ${TRACHEX_PROVIDER:-openai}
+      TRACHEX_MODEL: ${TRACHEX_MODEL:-gpt-4o-mini}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      ANVIA_LENS_ENABLED: ${ANVIA_LENS_ENABLED:-false}
+      ANVIA_LENS_PUBLIC_KEY: ${ANVIA_LENS_PUBLIC_KEY:-}
+      ANVIA_LENS_SECRET_KEY: ${ANVIA_LENS_SECRET_KEY:-}
+      ANVIA_LENS_API_URL: ${ANVIA_LENS_API_URL:-}
+      # Reserved for the future PostgreSQL storage adapter.
+      DATABASE_URL: ${DATABASE_URL:-postgresql://trachex:trachex@postgres:5432/trachex}
+      # Qdrant is optional; SQLite FTS5 remains the current default.
+      QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
+      QDRANT_API_KEY: ${QDRANT_API_KEY:-}
+      QDRANT_COLLECTION: ${QDRANT_COLLECTION:-trachex}
+    volumes:
+      - trachex_data:/data/trachex
+    expose:
+      - "8000"
+    restart: unless-stopped
+
+  # Enable with: docker compose -f docker-compose.prod.yml --profile vector up -d
+  qdrant:
+    image: qdrant/qdrant:v1.18.2
+    profiles: [vector]
+    volumes:
+      - qdrant_data:/qdrant/storage
+    expose:
+      - "6333"
+      - "6334"
+    restart: unless-stopped
+
+  # Enable with: docker compose -f docker-compose.prod.yml --profile postgres up -d
+  # The application does not use this service until a PostgreSQL adapter is implemented.
+  postgres:
+    image: postgres:16-alpine
+    profiles: [postgres]
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-trachex}
+      POSTGRES_USER: ${POSTGRES_USER:-trachex}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    expose:
+      - "5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  trachex_data:
+  qdrant_data:
+  postgres_data:

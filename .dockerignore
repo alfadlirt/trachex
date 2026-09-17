@@ -1,0 +1,15 @@
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+node_modules
+**/node_modules
+.turbo
+**/.turbo
+dist
+**/dist
+.trachex-data
+coverage
+*.log
+.DS_Store
