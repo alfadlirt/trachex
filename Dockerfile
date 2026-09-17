@@ -1,11 +1,11 @@
 # syntax=docker/dockerfile:1
 
-FROM node:20-bookworm-slim AS build
+FROM node:22-bookworm-slim AS build
 
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
 
-RUN corepack enable && corepack prepare pnpm@11.8.0 --activate
+RUN npm install --global pnpm@11.8.0
 WORKDIR /app
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.base.json ./
@@ -17,7 +17,7 @@ RUN pnpm install --frozen-lockfile
 COPY . .
 RUN pnpm --filter @trachex/dashboard build
 
-FROM node:20-bookworm-slim AS runtime
+FROM node:22-bookworm-slim AS runtime
 
 ENV NODE_ENV=production
 ENV PNPM_HOME=/pnpm
@@ -26,7 +26,7 @@ ENV TRACHEX_HOME=/data/trachex
 ENV TRACHEX_DASHBOARD_HOST=0.0.0.0
 ENV TRACHEX_DASHBOARD_PORT=8000
 
-RUN corepack enable && corepack prepare pnpm@11.8.0 --activate \
+RUN npm install --global pnpm@11.8.0 \
   && mkdir -p /data/trachex \
   && chown -R node:node /data/trachex
 
