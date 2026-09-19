@@ -132,6 +132,8 @@ function normalizeOutput(output: unknown): DomainProposalOutput {
       'description',
       'sourceLocation',
       'parentLabel',
+      'implementationItems',
+      'successCriteria',
       'impacts',
       'scenarios',
       'supersedes',

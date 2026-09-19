@@ -1,5 +1,24 @@
 import { z } from 'zod';
 
+const proposalDraftSchema = z.object({
+  title: z.string().min(1),
+  description: z.string().nullable().optional(),
+  sourceLocation: z.string().nullable().optional(),
+  parentLabel: z.string().nullable().optional(),
+  implementationItems: z.array(z.string().min(1)).optional(),
+  successCriteria: z.array(z.string().min(1)).optional(),
+  impacts: z
+    .array(z.object({ kind: z.enum(['service', 'api', 'page']), value: z.string().min(1) }))
+    .optional(),
+  scenarios: z.array(z.string().min(1)).optional(),
+  supersedes: z.array(z.string().min(1)).optional(),
+});
+
+export const proposalOutputSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('extraction'), requirements: z.array(proposalDraftSchema).min(1) }),
+  z.object({ kind: z.literal('reconciliation'), create: z.array(proposalDraftSchema) }),
+]);
+
 export const createProjectSchema = z.object({
   slug: z.string().min(1),
   name: z.string().min(1),
@@ -21,3 +40,5 @@ export const adjustmentSchema = z.object({
 export const checkSchema = z.object({
   confirm: z.literal(true),
 });
+
+export const proposalEditSchema = z.object({ editedOutput: proposalOutputSchema });

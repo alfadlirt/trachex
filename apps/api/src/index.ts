@@ -5,9 +5,7 @@ import { serve } from '@hono/node-server';
 import {
   buildObservability,
   createTrachexAgent,
-  extractionOutputSchema,
   type RunAgentFn,
-  reconciliationOutputSchema,
   resolveProviderConfig,
   runAgentWithSchema,
 } from '@trachex/agent';
@@ -46,16 +44,10 @@ export function buildRunAgent(ctx: ApiContext, env: NodeJS.ProcessEnv = process.
   }
   const observability = buildObservability(env);
   return async (args) => {
-    const schema =
-      args.outputSchema === extractionOutputSchema
-        ? extractionOutputSchema
-        : args.outputSchema === reconciliationOutputSchema
-          ? reconciliationOutputSchema
-          : args.outputSchema;
     const agent = createTrachexAgent(
       { provider: config, search: ctx.uow.search, observability },
       args.instructions,
-      schema,
+      args.outputSchema,
     );
     return runAgentWithSchema(agent, { prompt: args.userContent });
   };

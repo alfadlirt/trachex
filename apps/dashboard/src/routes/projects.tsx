@@ -35,37 +35,48 @@ function ProjectsPage() {
   };
 
   return (
-    <div>
-      <h1 className="mb-4 text-xl font-semibold">Projects</h1>
+    <div className="dashboard-paper overflow-hidden rounded-2xl">
+      <div className="border-b border-zinc-200 px-5 py-6 sm:px-8">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">
+          Workspace index
+        </p>
+        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-zinc-950">Projects</h1>
+        <p className="mt-2 max-w-xl text-sm leading-6 text-zinc-600">
+          Choose a project to return to its requirements, changes, and open human decisions.
+        </p>
+      </div>
       {error && (
         <p className="mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
           {error}
         </p>
       )}
-      <div className="mb-6 flex gap-2">
+      <div className="flex flex-col gap-3 border-b border-zinc-200 bg-zinc-50/70 px-5 py-4 sm:flex-row sm:items-end sm:px-8">
         <input
-          className="rounded border border-zinc-300 px-3 py-1.5 text-sm"
+          className="min-h-11 rounded-md border border-zinc-300 bg-white px-3 text-sm"
           placeholder="slug"
           value={slug}
           onChange={(e) => setSlug(e.target.value)}
         />
         <input
-          className="rounded border border-zinc-300 px-3 py-1.5 text-sm"
+          className="min-h-11 rounded-md border border-zinc-300 bg-white px-3 text-sm"
           placeholder="name"
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
         <button
           type="button"
-          className="rounded bg-zinc-900 px-3 py-1.5 text-sm text-white hover:bg-zinc-700"
+          className="min-h-11 rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800"
           onClick={create}
         >
           Create
         </button>
       </div>
-      <ul className="space-y-2">
+      <ul className="divide-y divide-zinc-200">
         {projects.map((p) => (
-          <li key={p.id} className="rounded border border-zinc-200 bg-white p-3">
+          <li
+            key={p.id}
+            className="bg-white px-5 py-4 transition-colors hover:bg-amber-50/40 sm:px-8"
+          >
             <Link
               to="/projects/$projectId"
               params={{ projectId: p.id }}

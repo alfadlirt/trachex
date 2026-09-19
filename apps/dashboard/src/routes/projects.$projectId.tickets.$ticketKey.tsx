@@ -1,7 +1,14 @@
 import { createRoute, Link, useParams } from '@tanstack/react-router';
 import { CheckCircle2, Circle, Download, History, MessageSquare } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
-import { api, type TicketCanvas } from '../lib/api.ts';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  api,
+  type ChatMessage,
+  type ChatSession,
+  type ProposalReview,
+  type ProposalReviewDraft,
+  type TicketCanvas,
+} from '../lib/api.ts';
 import { rootRoute } from './__root.tsx';
 
 export const ticketCanvasRoute = createRoute({
@@ -18,6 +25,8 @@ function TicketCanvasPage() {
   const [note, setNote] = useState('');
   const [source, setSource] = useState('chat');
   const [attribution, setAttribution] = useState('');
+  const [dirtyProposals, setDirtyProposals] = useState<Set<string>>(new Set());
+  const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
 
   const load = () => {
     api
@@ -28,28 +37,50 @@ function TicketCanvasPage() {
 
   useEffect(load, [projectId, ticketKey]);
 
+  const setProposalDirty = useCallback((proposalId: string, dirty: boolean) => {
+    setDirtyProposals((current) => {
+      const next = new Set(current);
+      if (dirty) next.add(proposalId);
+      else next.delete(proposalId);
+      return next;
+    });
+  }, []);
+
   if (error) return <p className="text-red-700">{error}</p>;
   if (!data) return <p className="text-zinc-500">Loading…</p>;
 
   const check = async (requirementId: string) => {
-    if (!window.confirm('Mark this requirement as complete? This is a human action.')) return;
-    await api.checkRequirement(requirementId);
-    load();
+    setConfirmation({
+      title: 'Mark requirement complete?',
+      message:
+        'This records a human completion action and keeps the requirement in the audit history.',
+      confirmLabel: 'Mark complete',
+      onConfirm: async () => {
+        await api.checkRequirement(requirementId);
+        load();
+      },
+    });
   };
 
   const approve = async (proposalId: string) => {
-    if (
-      !window.confirm('Approve this proposal? It will create or supersede canonical requirements.')
-    )
-      return;
-    await api.approveProposal(proposalId);
-    load();
+    setConfirmation({
+      title: 'Approve this proposal?',
+      message:
+        'This will create or supersede canonical checklist requirements. Review the proposal before continuing.',
+      confirmLabel: 'Approve proposal',
+      onConfirm: async () => {
+        await api.approveProposal(proposalId);
+        load();
+      },
+    });
   };
 
   const reject = async (proposalId: string) => {
     await api.rejectProposal(proposalId);
     load();
   };
+
+  const refreshAfterProposal = () => load();
 
   const submitAdjustment = async () => {
     if (!note.trim()) return;
@@ -79,18 +110,18 @@ function TicketCanvasPage() {
   const pending = data.proposals.filter((p) => p.status === 'pending');
 
   return (
-    <div>
-      <div className="mb-4 flex items-center justify-between">
+    <div className="dashboard-paper overflow-hidden rounded-2xl">
+      <div className="border-b border-zinc-200 bg-zinc-50/70 px-5 py-5 sm:px-8">
         <div>
           <Link
             to="/projects/$projectId"
             params={{ projectId }}
-            className="text-sm text-zinc-500 hover:underline"
+            className="text-sm text-zinc-500 hover:text-zinc-950 hover:underline"
           >
             {data.project.name}
           </Link>
           <span className="mx-2 text-zinc-400">/</span>
-          <span className="font-semibold">{data.ticket.key}</span>
+          <span className="font-semibold text-zinc-950">{data.ticket.key}</span>
           <span className="ml-2 text-sm text-zinc-500">{data.ticket.title}</span>
         </div>
         <div className="flex gap-2">
@@ -111,19 +142,29 @@ function TicketCanvasPage() {
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
-        <div>
+      <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_380px]">
+        <div className="min-w-0 px-5 py-6 sm:px-8">
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-lg font-semibold">Current Checklist</h2>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">
+                The work surface
+              </p>
+              <h2 className="mt-1 text-2xl font-semibold tracking-tight text-zinc-950">
+                Current Checklist
+              </h2>
+            </div>
             <span className="text-sm text-zinc-500">
               {data.checklist.filter((r) => r.devStatus === 'checked').length}/
               {data.checklist.length} done
             </span>
           </div>
 
-          <ul className="space-y-2">
+          <ul className="space-y-3">
             {data.checklist.map((r) => (
-              <li key={r.id} className="rounded border border-zinc-200 bg-white p-3">
+              <li
+                key={r.id}
+                className="rounded-xl border border-zinc-200 bg-white p-4 shadow-[0_1px_0_rgba(24,24,27,0.04)]"
+              >
                 <div className="flex items-start gap-2">
                   <button
                     type="button"
@@ -181,13 +222,60 @@ function TicketCanvasPage() {
               <ul className="space-y-2">
                 {pending.map((p) => (
                   <li key={p.id} className="rounded border border-amber-200 bg-amber-50 p-3">
-                    <p className="text-sm font-medium">{p.kind} proposal</p>
-                    <p className="text-xs text-zinc-500">{p.id}</p>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold text-zinc-900">{p.kind} proposal</span>
+                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800">
+                        Needs review
+                      </span>
+                    </div>
+                    {(() => {
+                      const review = data.proposalReviews.find((item) => item.proposalId === p.id);
+                      if (!review)
+                        return (
+                          <p className="mt-2 text-sm text-red-700">Review data unavailable.</p>
+                        );
+                      if (review.error) {
+                        return (
+                          <p className="mt-2 text-sm text-red-700">Review error: {review.error}</p>
+                        );
+                      }
+                      return (
+                        <div className="mt-3 space-y-3 text-sm">
+                          {review.source && (
+                            <p className="text-xs text-zinc-600">
+                              Source: {review.source.type}
+                              {review.source.attribution && ` · ${review.source.attribution}`}
+                              {review.source.location && ` · ${review.source.location}`}
+                              {review.source.sourceEventAt &&
+                                ` · occurred ${review.source.sourceEventAt.slice(0, 10)}`}
+                              {' · ingested '}
+                              {review.source.ingestedAt.slice(0, 10)}
+                            </p>
+                          )}
+                          <ProposalEditor
+                            proposalId={p.id}
+                            projectId={projectId}
+                            ticketKey={ticketKey}
+                            review={review}
+                            checklist={data.checklist}
+                            onSaved={refreshAfterProposal}
+                            onDirty={(dirty) => setProposalDirty(p.id, dirty)}
+                          />
+                        </div>
+                      );
+                    })()}
                     <div className="mt-2 flex gap-2">
                       <button
                         type="button"
                         className="rounded bg-emerald-600 px-2 py-1 text-xs text-white hover:bg-emerald-500"
                         onClick={() => approve(p.id)}
+                        disabled={
+                          !data.proposalReviews.find((item) => item.proposalId === p.id) ||
+                          Boolean(
+                            data.proposalReviews.find((item) => item.proposalId === p.id)?.error,
+                          ) ||
+                          dirtyProposals.has(p.id)
+                        }
                       >
                         Approve
                       </button>
@@ -245,7 +333,7 @@ function TicketCanvasPage() {
           </div>
         </div>
 
-        <aside className="space-y-4">
+        <aside className="border-t border-zinc-200 bg-zinc-50/60 p-5 sm:p-6 lg:border-l lg:border-t-0">
           <div className="flex gap-2">
             <button
               type="button"
@@ -303,75 +391,617 @@ function TicketCanvasPage() {
           {panel === 'chat' && <ChatPanel projectId={projectId} ticketKey={ticketKey} />}
         </aside>
       </div>
+      <ConfirmationDialog confirmation={confirmation} onClose={() => setConfirmation(null)} />
+    </div>
+  );
+}
+
+type Confirmation = {
+  title: string;
+  message: string;
+  confirmLabel: string;
+  onConfirm: () => Promise<void>;
+};
+
+function ConfirmationDialog({
+  confirmation,
+  onClose,
+}: {
+  confirmation: Confirmation | null;
+  onClose: () => void;
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    if (confirmation && !dialog.open) dialog.showModal();
+    if (!confirmation && dialog.open) dialog.close();
+  }, [confirmation]);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    const handleClose = () => {
+      if (!submitting) onClose();
+    };
+    dialog.addEventListener('close', handleClose);
+    return () => dialog.removeEventListener('close', handleClose);
+  }, [onClose, submitting]);
+
+  if (!confirmation) return <dialog ref={dialogRef} aria-hidden="true" />;
+
+  const confirm = async () => {
+    setSubmitting(true);
+    try {
+      await confirmation.onConfirm();
+      onClose();
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <dialog
+      ref={dialogRef}
+      aria-labelledby="confirmation-title"
+      aria-describedby="confirmation-message"
+      className="m-auto w-[min(calc(100%-2rem),28rem)] rounded-2xl border border-zinc-200 bg-[#fffdf8] p-0 text-zinc-950 shadow-2xl"
+    >
+      <div className="p-6">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">
+          Human decision
+        </p>
+        <h2 id="confirmation-title" className="mt-2 text-xl font-semibold tracking-tight">
+          {confirmation.title}
+        </h2>
+        <p id="confirmation-message" className="mt-3 text-sm leading-6 text-zinc-600">
+          {confirmation.message}
+        </p>
+        <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <button
+            type="button"
+            className="min-h-11 rounded-md px-4 text-sm font-medium text-zinc-700 hover:bg-zinc-100 disabled:opacity-50"
+            onClick={onClose}
+            disabled={submitting}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="min-h-11 rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800 disabled:cursor-wait disabled:opacity-60"
+            onClick={confirm}
+            disabled={submitting}
+          >
+            {submitting ? 'Working…' : confirmation.confirmLabel}
+          </button>
+        </div>
+      </div>
+    </dialog>
+  );
+}
+
+function ProposalEditor({
+  proposalId,
+  projectId,
+  ticketKey,
+  review,
+  checklist,
+  onSaved,
+  onDirty,
+}: {
+  proposalId: string;
+  projectId: string;
+  ticketKey: string;
+  review: ProposalReview;
+  checklist: TicketCanvas['checklist'];
+  onSaved: () => void;
+  onDirty: (dirty: boolean) => void;
+}) {
+  const [drafts, setDrafts] = useState<ProposalReviewDraft[]>(review.drafts);
+  const [editing, setEditing] = useState<Set<number>>(new Set());
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const dirty = JSON.stringify(drafts) !== JSON.stringify(review.drafts);
+  const valid =
+    drafts.length > 0 &&
+    drafts.every(
+      (draft) =>
+        draft.title.trim() &&
+        draft.implementationItems.every(Boolean) &&
+        draft.successCriteria.every(Boolean),
+    );
+  useEffect(() => {
+    setDrafts(review.drafts);
+    onDirty(false);
+  }, [review.drafts, onDirty]);
+
+  useEffect(() => {
+    onDirty(dirty);
+  }, [dirty, onDirty]);
+
+  const update = (index: number, patch: Partial<ProposalReviewDraft>) => {
+    setDrafts((current) =>
+      current.map((draft, i) => (i === index ? { ...draft, ...patch } : draft)),
+    );
+  };
+  const toggleEditing = (index: number) => {
+    setEditing((current) => {
+      const next = new Set(current);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+  };
+  const split = (value: string) =>
+    value
+      .split('\n')
+      .map((item) => item.trim())
+      .filter(Boolean);
+  const save = async () => {
+    if (!valid) return;
+    setSaving(true);
+    setMessage(null);
+    try {
+      const output = {
+        kind:
+          review.kind === 'reconciliation' ? ('reconciliation' as const) : ('extraction' as const),
+        ...(review.kind === 'reconciliation' ? { create: drafts } : { requirements: drafts }),
+      };
+      await api.editProposal(projectId, ticketKey, proposalId, output);
+      onDirty(false);
+      setMessage('Saved as a new proposal version.');
+      onSaved();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Unable to save edits.');
+    } finally {
+      setSaving(false);
+    }
+  };
+  const reset = async () => {
+    setSaving(true);
+    setMessage(null);
+    try {
+      await api.resetProposal(projectId, ticketKey, proposalId);
+      onDirty(false);
+      setMessage('Reset to the original model draft.');
+      onSaved();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Unable to reset draft.');
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <div className="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm">
+      <div className="mb-2 flex items-center justify-between">
+        <p className="text-sm font-semibold text-zinc-900">Review proposal</p>
+        <span className="text-xs text-zinc-500" aria-live="polite">
+          {review.isEdited ? 'Edited draft' : 'Original model draft'}
+        </span>
+      </div>
+      <p className="mb-4 text-xs leading-5 text-zinc-600">
+        Review the proposed work first. Edit only the points that need correction, then save before
+        approval.
+      </p>
+      {drafts.map((draft, index) => (
+        <div
+          key={`${proposalId}-${draft.title}`}
+          className="mb-4 border-t border-zinc-200 pt-4 last:mb-0"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+                Business requirement
+              </p>
+              <p className="mt-1 font-medium leading-6 text-zinc-900">{draft.title}</p>
+            </div>
+            <button
+              type="button"
+              className="min-h-11 shrink-0 rounded-md px-3 text-xs font-medium text-zinc-700 underline decoration-zinc-300 underline-offset-4 hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900"
+              onClick={() => toggleEditing(index)}
+            >
+              {editing.has(index) ? 'Close edit' : 'Edit'}
+            </button>
+          </div>
+          {draft.description && (
+            <p className="mt-2 text-sm leading-6 text-zinc-600">{draft.description}</p>
+          )}
+          <ReviewList label="Developer work" items={draft.implementationItems} />
+          <ReviewList label="Success criteria" items={draft.successCriteria} />
+          {draft.impacts.length > 0 && (
+            <p className="mt-3 text-xs text-zinc-600">
+              <span className="font-medium text-zinc-800">Impacts:</span>{' '}
+              {draft.impacts.map((impact) => `${impact.kind}: ${impact.value}`).join(', ')}
+            </p>
+          )}
+          {draft.supersedes.length > 0 && (
+            <p className="mt-2 text-xs text-zinc-600">
+              <span className="font-medium text-zinc-800">Replaces:</span>{' '}
+              {draft.supersedes
+                .map(
+                  (id) => checklist.find((item) => item.id === id)?.title ?? 'Unknown requirement',
+                )
+                .join(', ')}
+            </p>
+          )}
+          {editing.has(index) && (
+            <div className="mt-4 space-y-3 rounded-md bg-zinc-50 p-3">
+              <label className="block text-xs font-medium text-zinc-700">
+                Business requirement
+                <input
+                  aria-label="Business requirement"
+                  className="mt-1 min-h-11 w-full rounded-md border border-zinc-300 bg-white px-3 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-zinc-900"
+                  value={draft.title}
+                  onChange={(event) => update(index, { title: event.target.value })}
+                />
+              </label>
+              <label className="block text-xs font-medium text-zinc-700">
+                Description
+                <textarea
+                  aria-label="Business requirement description"
+                  className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-zinc-900"
+                  rows={2}
+                  value={draft.description ?? ''}
+                  onChange={(event) => update(index, { description: event.target.value || null })}
+                />
+              </label>
+              <label className="block text-xs font-medium text-zinc-700">
+                Developer work
+                <textarea
+                  aria-label="Developer implementation items"
+                  className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-zinc-900"
+                  rows={4}
+                  value={draft.implementationItems.join('\n')}
+                  onChange={(event) =>
+                    update(index, { implementationItems: split(event.target.value) })
+                  }
+                  placeholder="One environment-agnostic action per line"
+                />
+              </label>
+              <label className="block text-xs font-medium text-zinc-700">
+                Success criteria
+                <textarea
+                  aria-label="Success criteria"
+                  className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-zinc-900"
+                  rows={4}
+                  value={draft.successCriteria.join('\n')}
+                  onChange={(event) =>
+                    update(index, { successCriteria: split(event.target.value) })
+                  }
+                  placeholder="One observable outcome per line"
+                />
+              </label>
+              <label className="block text-xs font-medium text-zinc-700">
+                Supersedes checklist items
+                <span className="mt-1 block font-normal text-zinc-500">
+                  Hold Command or Control to select more than one.
+                </span>
+                <select
+                  aria-label="Supersedes checklist items"
+                  multiple
+                  className="mt-2 min-h-24 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-zinc-900"
+                  value={draft.supersedes}
+                  onChange={(event) =>
+                    update(index, {
+                      supersedes: Array.from(
+                        event.target.selectedOptions,
+                        (option) => option.value,
+                      ),
+                    })
+                  }
+                  disabled={checklist.length === 0}
+                >
+                  {checklist.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.title}
+                    </option>
+                  ))}
+                </select>
+                {checklist.length === 0 && (
+                  <span className="mt-1 block text-xs text-zinc-500">
+                    No active checklist items are available to supersede.
+                  </span>
+                )}
+              </label>
+            </div>
+          )}
+        </div>
+      ))}
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          className="rounded bg-zinc-900 px-3 py-1.5 text-xs text-white disabled:opacity-50"
+          onClick={save}
+          disabled={!dirty || !valid || saving}
+        >
+          Save edits
+        </button>
+        <button
+          type="button"
+          className="rounded border border-zinc-400 px-3 py-1.5 text-xs disabled:opacity-50"
+          onClick={reset}
+          disabled={!review.isEdited || saving}
+        >
+          Reset to original
+        </button>
+        {dirty && <span className="text-xs text-amber-700">Unsaved edits</span>}
+        {!valid && dirty && (
+          <span className="text-xs text-red-700">Title and list items cannot be empty.</span>
+        )}
+        {message && <span className="text-xs text-zinc-600">{message}</span>}
+      </div>
+    </div>
+  );
+}
+
+function ReviewList({ label, items }: { label: string; items: string[] }) {
+  return (
+    <div className="mt-3">
+      <p className="text-xs font-medium text-zinc-800">{label}</p>
+      {items.length > 0 ? (
+        <ul className="mt-1 list-disc space-y-1 pl-5 text-sm leading-6 text-zinc-700">
+          {items.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-1 text-xs text-zinc-500">None proposed.</p>
+      )}
     </div>
   );
 }
 
 function ChatPanel({ projectId, ticketKey }: { projectId: string; ticketKey: string }) {
   const [message, setMessage] = useState('');
-  const [log, setLog] = useState<{ id: number; text: string }[]>([]);
+  const [log, setLog] = useState<ChatMessage[]>([]);
+  const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [chatView, setChatView] = useState<'chat' | 'sessions'>('chat');
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const nextId = useRef(0);
-  const append = (text: string) => setLog((prev) => [...prev, { id: nextId.current++, text }]);
+  const append = (role: ChatMessage['role'], text: string) =>
+    setLog((prev) => [
+      ...prev,
+      {
+        id: `local-${nextId.current++}`,
+        sessionId: 'local',
+        role,
+        content: text,
+        createdAt: new Date().toISOString(),
+      },
+    ]);
+
+  useEffect(() => {
+    api
+      .getChatHistory(projectId, ticketKey)
+      .then((result) => {
+        setSessions(result.sessions);
+        const active =
+          result.sessions.find((item) => item.session.id === sessionId) ?? result.sessions[0];
+        if (active) {
+          setSessionId(active.session.id);
+          setLog(active.messages);
+        }
+      })
+      .catch(() => undefined);
+  }, [projectId, ticketKey, sessionId]);
+
+  const newChat = async () => {
+    const result = await api.createChatSession(projectId, ticketKey);
+    setSessionId(result.session.id);
+    setLog([]);
+    setError(null);
+    setChatView('chat');
+  };
 
   const send = async () => {
-    if (!message.trim()) return;
-    const res = await fetch(`/api/chat/${projectId}/${ticketKey}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message }),
-    });
-    const reader = res.body?.getReader();
-    if (!reader) return;
-    const decoder = new TextDecoder();
-    append(`> ${message}`);
+    const prompt = message.trim();
+    if (!prompt || sending) return;
+    setSending(true);
+    setError(null);
+    append('user', prompt);
     setMessage('');
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      const text = decoder.decode(value);
-      for (const line of text.trim().split('\n')) {
-        if (!line) continue;
-        try {
-          const ev = JSON.parse(line) as { type: string; text?: string; error?: string };
-          if (ev.type === 'error') append(`error: ${ev.error}`);
-          else if (ev.text) {
-            const text = ev.text;
-            append(text);
-          }
-        } catch {
-          append(line);
-        }
+    try {
+      const res = await fetch(`/api/chat/${projectId}/${ticketKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: prompt, sessionId }),
+      });
+      if (!res.ok) throw new Error(`Chat request failed (${res.status})`);
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error('Chat response did not include a stream.');
+      const decoder = new TextDecoder();
+      let buffer = '';
+      const consume = (line: string) => {
+        if (!line.trim()) return;
+        const ev = JSON.parse(line) as {
+          type: string;
+          text?: string;
+          error?: string;
+          source?: string;
+        };
+        if (ev.type === 'error') throw new Error(ev.error ?? 'The assistant could not answer.');
+        if (ev.type === 'text' && ev.text) append('assistant', ev.text);
+        if (ev.type === 'evidence' && ev.source) append('assistant', `Evidence: ${ev.source}`);
+      };
+      while (true) {
+        const { done, value } = await reader.read();
+        buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+        for (const line of lines) consume(line);
+        if (done) break;
       }
+      if (buffer.trim()) consume(buffer);
+    } catch (cause) {
+      const detail = cause instanceof Error ? cause.message : String(cause);
+      setError(detail);
+      append('assistant', `Error: ${detail}`);
+    } finally {
+      setSending(false);
     }
   };
 
   return (
-    <div className="rounded border border-zinc-200 bg-white p-3">
-      <h4 className="mb-2 text-sm font-semibold">Assistant</h4>
-      <div className="mb-2 max-h-64 space-y-1 overflow-y-auto text-xs text-zinc-600">
-        {log.map((entry) => (
-          <p key={entry.id}>{entry.text}</p>
-        ))}
+    <div className="rounded border border-zinc-200 bg-white p-4">
+      <div className="flex items-center justify-between gap-3">
+        <h4 className="text-sm font-semibold">Ticket assistant</h4>
+        {chatView === 'chat' && (
+          <button
+            type="button"
+            className="min-h-11 rounded-md border border-zinc-300 px-3 text-xs font-medium hover:bg-zinc-100"
+            onClick={newChat}
+          >
+            New Chat
+          </button>
+        )}
       </div>
-      <div className="flex gap-2">
-        <input
-          className="flex-1 rounded border border-zinc-300 px-2 py-1 text-sm"
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && send()}
-          placeholder="Ask about this ticket"
-        />
+      <div className="mt-3 flex border-b border-zinc-200 text-xs font-medium">
         <button
           type="button"
-          className="rounded bg-zinc-900 px-2 py-1 text-sm text-white hover:bg-zinc-700"
-          onClick={send}
+          className={`min-h-10 border-b-2 px-3 ${chatView === 'chat' ? 'border-amber-600 text-zinc-950' : 'border-transparent text-zinc-500 hover:text-zinc-900'}`}
+          onClick={() => setChatView('chat')}
+          aria-pressed={chatView === 'chat'}
         >
-          Send
+          Chat
+        </button>
+        <button
+          type="button"
+          className={`min-h-10 border-b-2 px-3 ${chatView === 'sessions' ? 'border-amber-600 text-zinc-950' : 'border-transparent text-zinc-500 hover:text-zinc-900'}`}
+          onClick={() => setChatView('sessions')}
+          aria-pressed={chatView === 'sessions'}
+        >
+          Sessions{sessions.length > 0 ? ` (${sessions.length})` : ''}
         </button>
       </div>
-      <p className="mt-2 text-[11px] text-zinc-400">
-        Chat only creates pending proposals — never silent changes.
-      </p>
+      {chatView === 'sessions' ? (
+        <div className="mt-3 max-h-[28rem] space-y-2 overflow-y-auto pr-1">
+          <button
+            type="button"
+            className="min-h-11 w-full rounded-md border border-dashed border-zinc-300 px-3 text-left text-xs font-medium text-zinc-700 hover:border-amber-500 hover:bg-amber-50"
+            onClick={newChat}
+          >
+            + Start a new conversation
+          </button>
+          {sessions.length === 0 && (
+            <p className="px-1 py-4 text-xs leading-5 text-zinc-500">
+              No previous conversations for this ticket.
+            </p>
+          )}
+          {sessions.map((item) => (
+            <button
+              key={item.session.id}
+              type="button"
+              className={`min-h-16 w-full rounded-md border p-3 text-left ${sessionId === item.session.id ? 'border-amber-500 bg-amber-50' : 'border-zinc-200 hover:bg-zinc-50'}`}
+              onClick={() => {
+                setSessionId(item.session.id);
+                setLog(item.messages);
+                setChatView('chat');
+              }}
+            >
+              <span className="block truncate text-xs font-medium text-zinc-900">{item.title}</span>
+              <span className="mt-1 block line-clamp-2 text-[11px] leading-4 text-zinc-500">
+                {item.preview || 'No messages yet'}
+              </span>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <>
+          <p className="mb-3 text-xs leading-5 text-zinc-500">
+            Ask what changed, what remains, or which evidence supports a requirement.
+          </p>
+          <div className="mb-2 max-h-80 space-y-3 overflow-y-auto text-sm leading-6 text-zinc-600">
+            {log.length === 0 && (
+              <p className="text-zinc-500">
+                No questions yet. The assistant reads this ticket's evidence.
+              </p>
+            )}
+            {log.map((entry) => (
+              <div key={entry.id} className={entry.role === 'user' ? 'ml-6 text-zinc-900' : 'mr-3'}>
+                {entry.role === 'user' ? (
+                  <p className="font-medium">{entry.content}</p>
+                ) : (
+                  <ChatMarkdown content={entry.content} />
+                )}
+              </div>
+            ))}
+          </div>
+          {error && <p className="mb-2 text-xs text-red-700">{error}</p>}
+          <div className="flex gap-2">
+            <input
+              className="flex-1 rounded border border-zinc-300 px-2 py-1 text-sm"
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && send()}
+              placeholder="Ask about this ticket"
+              disabled={sending}
+            />
+            <button
+              type="button"
+              className="min-w-20 rounded bg-zinc-900 px-2 py-1 text-sm text-white hover:bg-zinc-700"
+              onClick={send}
+              disabled={sending || !message.trim()}
+            >
+              {sending ? 'Reading…' : 'Ask'}
+            </button>
+          </div>
+          <p className="mt-2 text-[11px] text-zinc-400">
+            Chat only creates pending proposals — never silent changes.
+          </p>
+        </>
+      )}
     </div>
   );
+}
+
+function ChatMarkdown({ content }: { content: string }) {
+  return (
+    <div className="space-y-2">
+      {content.split(/\n{2,}/).map((block) => {
+        const trimmed = block.trim();
+        if (!trimmed) return null;
+        if (trimmed.split('\n').every((line) => line.trim().startsWith('- '))) {
+          return (
+            <ul key={trimmed} className="list-disc space-y-1 pl-5">
+              {trimmed.split('\n').map((line) => (
+                <li key={line}>{inlineMarkdown(line.slice(2))}</li>
+              ))}
+            </ul>
+          );
+        }
+        if (trimmed.startsWith('### '))
+          return (
+            <h5 key={trimmed} className="font-semibold text-zinc-900">
+              {inlineMarkdown(trimmed.slice(4))}
+            </h5>
+          );
+        if (trimmed.startsWith('## '))
+          return (
+            <h4 key={trimmed} className="font-semibold text-zinc-900">
+              {inlineMarkdown(trimmed.slice(3))}
+            </h4>
+          );
+        return <p key={trimmed}>{inlineMarkdown(trimmed)}</p>;
+      })}
+    </div>
+  );
+}
+
+function inlineMarkdown(value: string) {
+  const parts = value.split(/(`[^`]+`|\*\*[^*]+\*\*)/g);
+  return parts.map((part) => {
+    if (part.startsWith('`') && part.endsWith('`'))
+      return (
+        <code key={`code-${part}`} className="rounded bg-zinc-100 px-1 text-xs text-zinc-900">
+          {part.slice(1, -1)}
+        </code>
+      );
+    if (part.startsWith('**') && part.endsWith('**'))
+      return <strong key={`strong-${part}`}>{part.slice(2, -2)}</strong>;
+    return part;
+  });
 }

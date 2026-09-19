@@ -12,10 +12,13 @@ function tempAppDir(): string {
   return mkdtempSync(join(tmpdir(), 'trachex-api-'));
 }
 
-const runAgent: RunAgentFn = async () => ({
-  kind: 'reconciliation',
-  create: [{ title: 'Discount cap 15%' }],
-});
+const runAgent: RunAgentFn = async ({ instructions }) =>
+  instructions.includes('ticket-context assistant')
+    ? { answer: 'The ticket baseline is available for review.', evidence: [] }
+    : {
+        kind: 'reconciliation',
+        create: [{ title: 'Discount cap 15%' }],
+      };
 
 async function setup() {
   const appDir = tempAppDir();
@@ -69,9 +72,14 @@ test('GET ticket canvas returns checklist, proposals, timeline', async () => {
   try {
     const res = await app.request(`/api/projects/${project.id}/tickets/${ticket.key}`);
     assert.equal(res.status, 200);
-    const body = (await res.json()) as { checklist: unknown[]; timeline: unknown[] };
+    const body = (await res.json()) as {
+      checklist: unknown[];
+      timeline: unknown[];
+      proposalReviews: unknown[];
+    };
     assert.ok(Array.isArray(body.checklist));
     assert.ok(Array.isArray(body.timeline));
+    assert.ok(Array.isArray(body.proposalReviews));
   } finally {
     ctx.db.close();
     rmSync(appDir, { recursive: true, force: true });

@@ -1,0 +1,2 @@
+{"file":".trellis/spec/frontend/directory-structure.md","reason":"Verify route structure, responsive behavior, focus states, and dashboard conventions."}
+{"file":".trellis/spec/guides/index.md","reason":"Verify cross-layer and reuse risks during dashboard-wide redesign."}

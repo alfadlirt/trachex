@@ -1,12 +1,16 @@
 import { type RunAgentFn, runReconciliation } from '@trachex/agent';
+import type { ProposalOutput } from '@trachex/domain';
 import {
   approveProposal,
   buildExportSummary,
+  buildProposalReviews,
   checkRequirement,
   createProject,
   createTicket,
+  editProposal,
   NotFoundError,
   rejectProposal,
+  resetProposal,
   serializeJson,
   serializeMarkdown,
 } from '@trachex/domain';
@@ -18,6 +22,7 @@ import {
   checkSchema,
   createProjectSchema,
   createTicketSchema,
+  proposalEditSchema,
 } from './validation.ts';
 
 export interface RouteDeps {
@@ -87,6 +92,7 @@ export function createRoutes(deps: RouteDeps): Hono {
     }
     const checklist = await ctx.uow.requirements.listActiveByTicket(ticket.id);
     const proposals = await ctx.uow.proposals.listByTicket(ticket.id);
+    const proposalReviews = await buildProposalReviews(ctx.uow, ticket.id);
     const sources = await ctx.uow.sources.listByTicket(ticket.id);
     const impacts = await ctx.uow.requirements.listImpactsByTicket(ticket.id);
     const scenarios = await ctx.uow.requirements.listScenariosByTicket(ticket.id);
@@ -99,6 +105,7 @@ export function createRoutes(deps: RouteDeps): Hono {
       ticket,
       checklist,
       proposals,
+      proposalReviews,
       sources,
       impacts,
       scenarios,
@@ -154,6 +161,50 @@ export function createRoutes(deps: RouteDeps): Hono {
     try {
       await approveProposal(ctx.uow, { proposalId: c.req.param('proposalId') });
       return c.json({ proposalId: c.req.param('proposalId'), status: 'approved' });
+    } catch (error) {
+      return c.json(errorPayload(error), statusForError(error));
+    }
+  });
+
+  app.post('/projects/:projectId/tickets/:ticketKey/proposals/:proposalId/edit', async (c) => {
+    try {
+      const body = proposalEditSchema.parse(await c.req.json());
+      const proposal = await ctx.uow.proposals.findById(c.req.param('proposalId'));
+      if (!proposal)
+        return c.json(errorPayload(new NotFoundError('proposal', c.req.param('proposalId'))), 404);
+      const ticket = await ctx.uow.tickets.findById(proposal.ticketId);
+      if (!ticket) return c.json(errorPayload(new NotFoundError('ticket', proposal.ticketId)), 404);
+      if (
+        ticket.projectId !== c.req.param('projectId') ||
+        ticket.key !== c.req.param('ticketKey')
+      ) {
+        return c.json(errorPayload(new NotFoundError('proposal', c.req.param('proposalId'))), 404);
+      }
+      const version = await editProposal(ctx.uow, {
+        proposalId: proposal.id,
+        editedOutput: body.editedOutput as unknown as ProposalOutput,
+      });
+      return c.json({ proposalId: proposal.id, version });
+    } catch (error) {
+      return c.json(errorPayload(error), statusForError(error));
+    }
+  });
+
+  app.post('/projects/:projectId/tickets/:ticketKey/proposals/:proposalId/reset', async (c) => {
+    try {
+      const proposal = await ctx.uow.proposals.findById(c.req.param('proposalId'));
+      if (!proposal)
+        return c.json(errorPayload(new NotFoundError('proposal', c.req.param('proposalId'))), 404);
+      const ticket = await ctx.uow.tickets.findById(proposal.ticketId);
+      if (!ticket) return c.json(errorPayload(new NotFoundError('ticket', proposal.ticketId)), 404);
+      if (
+        ticket.projectId !== c.req.param('projectId') ||
+        ticket.key !== c.req.param('ticketKey')
+      ) {
+        return c.json(errorPayload(new NotFoundError('proposal', c.req.param('proposalId'))), 404);
+      }
+      const version = await resetProposal(ctx.uow, { proposalId: proposal.id });
+      return c.json({ proposalId: proposal.id, version });
     } catch (error) {
       return c.json(errorPayload(error), statusForError(error));
     }

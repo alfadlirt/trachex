@@ -4,7 +4,6 @@ import { OpenAIClient } from '@anvia/openai';
 import type { SearchRepository, SearchResult } from '@trachex/domain';
 import { z } from 'zod';
 import type { ProviderConfig } from './provider.ts';
-import type { ProposalOutput } from './schemas.ts';
 
 export interface AgentDeps {
   provider: ProviderConfig;
@@ -16,8 +15,8 @@ export interface AgentDeps {
 export type RunAgentFn = (input: {
   instructions: string;
   userContent: string;
-  outputSchema: z.ZodSchema<ProposalOutput>;
-}) => Promise<ProposalOutput>;
+  outputSchema: z.ZodSchema<unknown>;
+}) => Promise<unknown>;
 
 export function createSearchTool(search: SearchRepository) {
   return createTool({
@@ -38,8 +37,8 @@ export function createSearchTool(search: SearchRepository) {
 export function createTrachexAgent(
   deps: AgentDeps,
   instructions: string,
-  outputSchema: z.ZodSchema<ProposalOutput>,
-): Agent<ProposalOutput> {
+  outputSchema: z.ZodSchema<unknown>,
+): Agent<unknown> {
   const client = new OpenAIClient({
     baseUrl: deps.provider.baseUrl,
     ...(deps.provider.apiKey !== null ? { apiKey: deps.provider.apiKey } : {}),
@@ -59,9 +58,9 @@ export function createTrachexAgent(
 }
 
 export async function runAgentWithSchema(
-  agent: Agent<ProposalOutput>,
+  agent: Agent<unknown>,
   input: { prompt: string },
-): Promise<ProposalOutput> {
+): Promise<unknown> {
   const outcome = await agent.generate({ prompt: input.prompt });
   if (outcome.type !== 'response') {
     throw new Error(`agent did not produce a response: ${outcome.type}`);

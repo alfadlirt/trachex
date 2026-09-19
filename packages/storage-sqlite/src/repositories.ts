@@ -1069,6 +1069,13 @@ export class SqliteSessionRepository implements SessionRepository {
     return row ? sessionFromRow(row) : null;
   }
 
+  async listByTicket(ticketId: string): Promise<ChatSession[]> {
+    const rows = this.db
+      .prepare('SELECT * FROM sessions WHERE ticket_id = ? ORDER BY updated_at DESC')
+      .all(ticketId) as Row[];
+    return rows.map(sessionFromRow);
+  }
+
   async update(session: ChatSession): Promise<ChatSession> {
     this.db
       .prepare('UPDATE sessions SET updated_at = ? WHERE id = ?')

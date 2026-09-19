@@ -1,0 +1,28 @@
+{
+  "id": "demo-day-readiness",
+  "name": "demo-day-readiness",
+  "title": "Assess demo day readiness and remaining implementation work",
+  "description": "Analyze the current codebase and project requirements, identify completed and missing demo-day capabilities, and produce a prioritized implementation roadmap.",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "alfa",
+  "assignee": "alfa",
+  "createdAt": "2026-09-19",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "09-19-proposal-review-ui"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

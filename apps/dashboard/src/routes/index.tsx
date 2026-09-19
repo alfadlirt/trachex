@@ -1,5 +1,6 @@
 import { createRoute, Link } from '@tanstack/react-router';
 import { X } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { cn } from '../lib/utils.ts';
 import { rootRoute } from './__root.tsx';
@@ -113,19 +114,56 @@ function LandingPage() {
       <LandingHeader onStayTuned={openStayTuned} />
       <main>
         <Hero onStayTuned={openStayTuned} />
-        <PainSection />
-        <EvidenceSection
-          events={TIMELINE_EVENTS}
-          selectedId={selectedId}
-          selectedEvent={selectedEvent}
-          onSelect={setSelectedId}
-        />
-        <HowItWorks />
-        <HumanTouch />
-        <ClosingCta onStayTuned={openStayTuned} />
+        <Reveal>
+          <PainSection />
+        </Reveal>
+        <Reveal>
+          <EvidenceSection
+            events={TIMELINE_EVENTS}
+            selectedId={selectedId}
+            selectedEvent={selectedEvent}
+            onSelect={setSelectedId}
+          />
+        </Reveal>
+        <Reveal>
+          <HowItWorks />
+        </Reveal>
+        <Reveal>
+          <HumanTouch />
+        </Reveal>
+        <Reveal>
+          <ClosingCta onStayTuned={openStayTuned} />
+        </Reveal>
       </main>
       <LandingFooter />
       <StayTunedDialog open={stayTunedOpen} onClose={() => setStayTunedOpen(false)} />
+    </div>
+  );
+}
+
+function Reveal({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting) {
+          setVisible(true);
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.12 },
+    );
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div ref={ref} className={visible ? 'landing-reveal landing-reveal-visible' : 'landing-reveal'}>
+      {children}
     </div>
   );
 }

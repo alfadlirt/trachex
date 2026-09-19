@@ -7,6 +7,8 @@ export const requirementDraftSchema = z.object({
   description: z.string().nullish().default(null),
   sourceLocation: z.string().nullish().default(null),
   parentLabel: z.string().nullish().default(null),
+  implementationItems: z.array(z.string().min(1)).nullish().default(null),
+  successCriteria: z.array(z.string().min(1)).nullish().default(null),
   impacts: z
     .array(
       z.object({
@@ -40,6 +42,8 @@ export interface RequirementDraft {
   description?: string | null;
   sourceLocation?: string | null;
   parentLabel?: string | null;
+  implementationItems?: string[] | null;
+  successCriteria?: string[] | null;
   impacts?: Array<{ kind: z.infer<typeof impactKindSchema>; value: string }> | null;
   scenarios?: string[] | null;
   supersedes?: string[] | null;

@@ -1,52 +1,99 @@
-export const FSD_LOYALTY = `# FSD: Loyalty Program v1.2
+import { buildExtractionPrompt } from '../prompts.ts';
 
-## 4.2 Discount Application
-The system MUST validate the customer's loyalty tier before applying any discount.
-The discount cap is 20% for all tiers. VIP tier customers are not exempt from the cap.
-
-## 4.3 Receipts
-Cashier receipts must display the discount breakdown and the applied tier.
-Receipts must use the store's local timezone for the timestamp.
-
-## 4.4 Checkout
-The checkout summary page must show the discounted total before payment.
-`;
-
-export const ADJUSTMENT_DISCOUNT_CAP = `Discount cap should be 15%, not 20%. VIP tier is exempt from the cap.`;
-
-export const ADJUSTMENT_TIMEZONE = `Cashier receipt timezone lookup should use the store's configured timezone, not the terminal timezone.`;
-
-export const BRD_LOYALTY = `# BRD: Loyalty Program
-
-## Goals
-Increase repeat purchases via a tiered loyalty program.
-
-## Requirements
-- Customers earn points per purchase.
-- Points convert to tier status.
-- The front-office service exposes tier validation to checkout.
-`;
-
-export interface GoldenExtraction {
+export interface ChecklistFixture {
+  id: string;
   source: string;
-  title: string;
-  impacts: { kind: 'service' | 'api' | 'page'; value: string }[];
-  scenarios: string[];
+  concepts: string[];
+  output: {
+    kind: 'extraction';
+    requirements: Array<{
+      title: string;
+      description?: string;
+      implementationItems?: string[];
+      successCriteria?: string[];
+    }>;
+  };
+  expected: 'pass' | 'fail';
+  requiresUncertainty?: boolean;
 }
 
-export const GOLDEN_EXTRACTION: GoldenExtraction[] = [
+export const CHECKLIST_FIXTURES: ChecklistFixture[] = [
   {
-    source: FSD_LOYALTY,
-    title: 'Validate loyalty tier before applying discount',
-    impacts: [{ kind: 'service', value: 'front-office-service' }],
-    scenarios: ['VIP at cap'],
+    id: 'pause-subscription-grounded',
+    source:
+      'Customers can pause an active subscription. A paused subscription must not be charged as active, and the user must see the paused state.',
+    concepts: ['pause', 'active subscription', 'charged', 'paused state'],
+    output: {
+      kind: 'extraction',
+      requirements: [
+        {
+          title: 'Customers can pause an active subscription',
+          description: 'Preserve the business rule that only an active subscription can be paused.',
+          implementationItems: [
+            'Add the pause operation to the subscription application flow.',
+            'Validate that only active subscriptions can be paused.',
+            'Persist the paused state and pause time.',
+            'Update user-facing subscription state and error handling.',
+          ],
+          successCriteria: [
+            'An active subscription can be paused and is shown as paused.',
+            'A paused subscription is not charged as active.',
+            'Repeated pause requests are handled safely.',
+          ],
+        },
+      ],
+    },
+    expected: 'pass',
+  },
+  {
+    id: 'invented-implementation',
+    source: 'Customers can pause an active subscription.',
+    concepts: ['pause', 'active subscription'],
+    output: {
+      kind: 'extraction',
+      requirements: [
+        {
+          title: 'Pause subscriptions with React and PostgreSQL',
+          implementationItems: [
+            'Add src/routes/subscriptions.tsx using React.',
+            'Create a PostgreSQL subscriptions table and REST endpoint.',
+          ],
+          successCriteria: ['The React page writes to PostgreSQL.'],
+        },
+      ],
+    },
+    expected: 'fail',
+  },
+  {
+    id: 'insufficient-context-explicit-uncertainty',
+    source:
+      'The product must support regional tax treatment, but no repository, architecture, or technical context is available yet.',
+    concepts: ['regional tax', 'tax treatment'],
+    output: {
+      kind: 'extraction',
+      requirements: [
+        {
+          title: 'The product supports regional tax treatment',
+          description:
+            'The technical approach is uncertain until the applicable regions and existing tax rules are clarified.',
+          implementationItems: [
+            'Define the regional tax rules and ownership of the calculation behavior.',
+            'Represent the selected regional treatment and expose the resulting customer-visible state.',
+          ],
+          successCriteria: [
+            'A supported region receives the applicable tax treatment.',
+            'The applied treatment is visible to the user.',
+          ],
+        },
+      ],
+    },
+    expected: 'pass',
+    requiresUncertainty: true,
   },
 ];
 
-export const GOLDEN_RECONCILIATION = {
-  source: ADJUSTMENT_DISCOUNT_CAP,
-  createTitle: 'Discount cap 15%, VIP tier exempt',
-  supersedesTitle: 'Validate loyalty tier before applying discount',
-};
+export const PROMPT_ALIGNMENT_SOURCE = 'subscription pause';
 
-export const GOLDEN_IMPACT_KINDS = ['service', 'api', 'page'] as const;
+export function promptGuardrails(): string {
+  return buildExtractionPrompt({ sourceType: 'requirements' });
+}

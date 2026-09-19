@@ -186,7 +186,10 @@ export interface RequirementDraft {
   description?: string;
   sourceLocation?: string;
   parentLabel?: string;
+  implementationItems?: string[];
+  successCriteria?: string[];
   impacts?: { kind: ImpactKind; value: string }[];
+  /** Legacy name retained for proposals created before successCriteria. */
   scenarios?: string[];
   supersedes?: string[];
 }
@@ -203,11 +206,48 @@ export interface ReconciliationOutput {
 
 export type ProposalOutput = ExtractionOutput | ReconciliationOutput;
 
-function validateProposalOutput(output: ProposalOutput): void {
-  if (!output || (output.kind !== 'extraction' && output.kind !== 'reconciliation')) {
+export interface ProposalReviewDraft {
+  title: string;
+  description: string | null;
+  sourceLocation: string | null;
+  implementationItems: string[];
+  successCriteria: string[];
+  impacts: { kind: ImpactKind; value: string }[];
+  scenarios: string[];
+  supersedes: string[];
+}
+
+export interface ProposalReviewTarget {
+  id: string;
+  title: string;
+  status: Requirement['lifecycleStatus'];
+}
+
+export interface ProposalReview {
+  proposalId: string;
+  kind: Proposal['kind'];
+  status: Proposal['status'];
+  source: Pick<Source, 'type' | 'attribution' | 'location' | 'sourceEventAt' | 'ingestedAt'> | null;
+  drafts: ProposalReviewDraft[];
+  originalDrafts: ProposalReviewDraft[];
+  isEdited: boolean;
+  version: number;
+  supersessionTargets: ProposalReviewTarget[];
+  error: string | null;
+}
+
+function validateProposalOutput(output: unknown): asserts output is ProposalOutput {
+  if (
+    !output ||
+    typeof output !== 'object' ||
+    !('kind' in output) ||
+    (output.kind !== 'extraction' && output.kind !== 'reconciliation')
+  ) {
     throw new InvalidOperationError('proposal output must be an extraction or reconciliation');
   }
-  const drafts = output.kind === 'extraction' ? output.requirements : output.create;
+  // The discriminant is checked above; the remaining fields are validated below.
+  const typedOutput = output as ProposalOutput;
+  const drafts = typedOutput.kind === 'extraction' ? typedOutput.requirements : typedOutput.create;
   if (!Array.isArray(drafts) || (output.kind === 'extraction' && drafts.length === 0)) {
     throw new InvalidOperationError('proposal output has an invalid draft list');
   }
@@ -220,6 +260,26 @@ function validateProposalOutput(output: ProposalOutput): void {
     ) {
       throw new InvalidOperationError('proposal drafts require a non-empty title');
     }
+    for (const field of ['description', 'sourceLocation', 'parentLabel'] as const) {
+      if (
+        field in draft &&
+        draft[field] !== undefined &&
+        draft[field] !== null &&
+        typeof draft[field] !== 'string'
+      ) {
+        throw new InvalidOperationError(`proposal ${field} must be a string`);
+      }
+    }
+    for (const field of ['implementationItems', 'successCriteria'] as const) {
+      if (field in draft && draft[field] !== undefined && !Array.isArray(draft[field])) {
+        throw new InvalidOperationError(`proposal ${field} must be an array`);
+      }
+      for (const item of draft[field] ?? []) {
+        if (typeof item !== 'string' || item.trim().length === 0) {
+          throw new InvalidOperationError(`proposal ${field} must contain non-empty strings`);
+        }
+      }
+    }
     if (draft.supersedes !== undefined && !Array.isArray(draft.supersedes)) {
       throw new InvalidOperationError('proposal supersedes must be an array of ids');
     }
@@ -228,7 +288,133 @@ function validateProposalOutput(output: ProposalOutput): void {
         throw new InvalidOperationError('proposal supersedes targets must be non-empty ids');
       }
     }
+    if (draft.impacts !== undefined && !Array.isArray(draft.impacts)) {
+      throw new InvalidOperationError('proposal impacts must be an array');
+    }
+    for (const impact of draft.impacts ?? []) {
+      if (
+        !impact ||
+        typeof impact !== 'object' ||
+        (impact.kind !== 'service' && impact.kind !== 'api' && impact.kind !== 'page') ||
+        typeof impact.value !== 'string' ||
+        impact.value.trim().length === 0
+      ) {
+        throw new InvalidOperationError('proposal impacts are invalid');
+      }
+    }
+    if (draft.scenarios !== undefined && !Array.isArray(draft.scenarios)) {
+      throw new InvalidOperationError('proposal scenarios must be an array');
+    }
+    for (const scenario of draft.scenarios ?? []) {
+      if (typeof scenario !== 'string' || scenario.trim().length === 0) {
+        throw new InvalidOperationError('proposal scenarios are invalid');
+      }
+    }
   }
+}
+
+function parseProposalOutput(value: string): ProposalOutput {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    throw new InvalidOperationError('proposal output is not valid JSON');
+  }
+  validateProposalOutput(parsed);
+  return parsed;
+}
+
+function parseAndValidateProposalOutput(value: string): ProposalOutput {
+  const output = parseProposalOutput(value);
+  validateProposalOutput(output);
+  return output;
+}
+
+function reviewDraft(draft: RequirementDraft): ProposalReviewDraft {
+  return {
+    title: draft.title,
+    description: draft.description ?? null,
+    sourceLocation: draft.sourceLocation ?? null,
+    implementationItems: [...(draft.implementationItems ?? [])],
+    successCriteria: [...(draft.successCriteria ?? draft.scenarios ?? [])],
+    impacts: (draft.impacts ?? []).map((impact) => ({ ...impact })),
+    scenarios: [...(draft.scenarios ?? [])],
+    supersedes: [...(draft.supersedes ?? [])],
+  };
+}
+
+/** Builds a read-only, safe-to-render view of proposal versions for a ticket. */
+export async function buildProposalReviews(
+  uow: UnitOfWork,
+  ticketId: string,
+): Promise<ProposalReview[]> {
+  const proposals = await uow.proposals.listByTicket(ticketId);
+  const reviews: ProposalReview[] = [];
+  for (const proposal of proposals) {
+    const candidateSource = proposal.sourceId
+      ? await uow.sources.findById(proposal.sourceId)
+      : null;
+    const source = candidateSource?.ticketId === ticketId ? candidateSource : null;
+    const review: ProposalReview = {
+      proposalId: proposal.id,
+      kind: proposal.kind,
+      status: proposal.status,
+      source: source
+        ? {
+            type: source.type,
+            attribution: source.attribution,
+            location: source.location,
+            sourceEventAt: source.sourceEventAt,
+            ingestedAt: source.ingestedAt,
+          }
+        : null,
+      drafts: [],
+      originalDrafts: [],
+      isEdited: false,
+      version: 0,
+      supersessionTargets: [],
+      error: null,
+    };
+    try {
+      const versions = await uow.proposals.listVersions(proposal.id);
+      const latest = versions.at(-1);
+      if (!latest) throw new InvalidOperationError('proposal has no versions');
+      review.version = latest.version;
+      review.isEdited = latest.editedOutput !== null;
+      const originalOutput = parseProposalOutput(versions[0]?.modelOutput ?? latest.modelOutput);
+      const output = parseProposalOutput(latest.editedOutput ?? latest.modelOutput);
+      if (originalOutput.kind !== proposal.kind || output.kind !== proposal.kind) {
+        throw new InvalidOperationError(`proposal output kind must remain ${proposal.kind}`);
+      }
+      const originalDrafts =
+        originalOutput.kind === 'extraction' ? originalOutput.requirements : originalOutput.create;
+      const drafts = output.kind === 'extraction' ? output.requirements : output.create;
+      review.drafts = drafts.map(reviewDraft);
+      review.originalDrafts = originalDrafts.map(reviewDraft);
+      const targetIds = drafts.flatMap((draft) => draft.supersedes ?? []);
+      for (const targetId of targetIds) {
+        const target = await uow.requirements.findById(targetId);
+        if (!target) {
+          throw new InvalidOperationError(`cannot review unknown supersession target: ${targetId}`);
+        }
+        if (target.ticketId !== ticketId) {
+          throw new InvalidOperationError(
+            'cannot review a supersession target from another ticket',
+          );
+        }
+        review.supersessionTargets.push({
+          id: target.id,
+          title: target.title,
+          status: target.lifecycleStatus,
+        });
+      }
+    } catch (error) {
+      review.error =
+        error instanceof Error ? error.message : 'proposal output could not be reviewed';
+    }
+    reviews.push(review);
+  }
+  return reviews;
 }
 
 export interface CreateProposalInput {
@@ -459,6 +645,11 @@ export async function editProposal(
   if (proposal.status !== 'pending') {
     throw new InvalidOperationError('only pending proposals can be edited');
   }
+  if (proposal.kind !== input.editedOutput.kind) {
+    throw new InvalidOperationError(
+      `edited proposal kind must remain ${proposal.kind}, received ${input.editedOutput.kind}`,
+    );
+  }
   const versions = await uow.proposals.listVersions(proposal.id);
   const original = versions[0];
   if (!original) {
@@ -471,6 +662,31 @@ export async function editProposal(
     version: nextVersion,
     modelOutput: original.modelOutput,
     editedOutput: JSON.stringify(input.editedOutput),
+    reviewedAt: null,
+    createdAt: nowIso(),
+  };
+  await uow.proposals.addVersion(version);
+  return version;
+}
+
+export async function resetProposal(
+  uow: UnitOfWork,
+  input: { proposalId: string },
+): Promise<ProposalVersion> {
+  const proposal = await uow.proposals.findById(input.proposalId);
+  if (!proposal) throw new NotFoundError('proposal', input.proposalId);
+  if (proposal.status !== 'pending') {
+    throw new InvalidOperationError('only pending proposals can be reset');
+  }
+  const versions = await uow.proposals.listVersions(proposal.id);
+  const original = versions[0];
+  if (!original) throw new InvalidOperationError('proposal has no versions');
+  const version: ProposalVersion = {
+    id: newId(),
+    proposalId: proposal.id,
+    version: versions.length + 1,
+    modelOutput: original.modelOutput,
+    editedOutput: null,
     reviewedAt: null,
     createdAt: nowIso(),
   };
@@ -494,8 +710,14 @@ export async function approveProposal(uow: UnitOfWork, input: ApproveProposalInp
   const effectiveOutput: ProposalOutput = input.editedOutput
     ? input.editedOutput
     : latest.editedOutput
-      ? (JSON.parse(latest.editedOutput) as ProposalOutput)
-      : (JSON.parse(latest.modelOutput) as ProposalOutput);
+      ? parseAndValidateProposalOutput(latest.editedOutput)
+      : parseAndValidateProposalOutput(latest.modelOutput);
+  validateProposalOutput(effectiveOutput);
+  if (effectiveOutput.kind !== proposal.kind) {
+    throw new InvalidOperationError(
+      `proposal output kind must remain ${proposal.kind}, received ${effectiveOutput.kind}`,
+    );
+  }
   const output = effectiveOutput;
 
   const now = nowIso();
@@ -599,7 +821,7 @@ async function createRequirementFromDraft(
     };
     await uow.requirements.addImpact(row);
   }
-  for (const text of draft.scenarios ?? []) {
+  for (const text of draft.successCriteria ?? draft.scenarios ?? []) {
     const row: Scenario = {
       id: newId(),
       requirementId: requirement.id,
@@ -608,6 +830,22 @@ async function createRequirementFromDraft(
       createdAt: now,
     };
     await uow.requirements.addScenario(row);
+  }
+  // Keep the business requirement as context and make each developer action a
+  // separately checkable child. Older proposals without implementationItems
+  // retain their existing one-row behavior.
+  for (const item of draft.implementationItems ?? []) {
+    await uow.requirements.create({
+      ...requirement,
+      id: newId(),
+      title: item.trim(),
+      description: `Developer work for: ${requirement.title}`,
+      parentId: requirement.id,
+      parentLabel: requirement.title,
+      displayOrder: await nextDisplayOrder(uow, ticketId),
+      createdAt: now,
+      updatedAt: now,
+    });
   }
   return requirement;
 }

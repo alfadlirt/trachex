@@ -119,6 +119,7 @@ export interface CompletionAuditRepository {
 export interface SessionRepository {
   create(session: ChatSession): Promise<ChatSession>;
   findById(id: string): Promise<ChatSession | null>;
+  listByTicket?(ticketId: string): Promise<ChatSession[]>;
   update(session: ChatSession): Promise<ChatSession>;
   addMessage(message: ChatMessage): Promise<ChatMessage>;
   listMessages(sessionId: string): Promise<ChatMessage[]>;
