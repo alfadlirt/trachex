@@ -67,3 +67,57 @@ Biome 2 at repo root, `tsx` for running TS in tests/dev. Node engine floor is
 - [ ] No SQLite/Anvia types leak across layer boundaries.
 - [ ] No secrets or machine-specific absolute paths.
 - [ ] New cross-layer contracts are reflected in `docs/` or spec files.
+
+## Static Dashboard Serving Contract
+
+### 1. Scope / Trigger
+
+The API process serves the Vite dashboard in production, so static asset responses are a browser-facing deployment contract.
+
+### 2. Signatures
+
+- `createApp(options?: DashboardOptions)` serves `/api/*` and the dashboard distribution.
+- `DashboardOptions.dashboardDist` identifies the built dashboard directory used by tests and production.
+
+### 3. Contracts
+
+- Existing non-HTML dashboard assets return `200` with a MIME type derived from their extension.
+- JavaScript modules return `text/javascript`; stylesheets return `text/css`.
+- Unknown client-side dashboard paths return `index.html` with `text/html; charset=UTF-8`.
+- `/api/*` routes remain JSON/API responses and are registered before the dashboard fallback.
+
+### 4. Validation & Error Matrix
+
+| Condition | Response |
+|---|---|
+| Existing known asset | `200` with its mapped MIME type |
+| Existing unmapped asset | `200 application/octet-stream` |
+| Missing dashboard path | `200` with the dashboard HTML fallback |
+| API health request | `200 application/json`, never SPA HTML |
+
+### 5. Good/Base/Bad Cases
+
+- Good: serve `main.js` as `text/javascript` and `main.css` as `text/css`.
+- Base: use the SPA fallback for `/projects/:id`.
+- Bad: return raw asset bytes without `Content-Type`; browsers may refuse the module and render a blank page.
+
+### 6. Tests Required
+
+- Assert the dashboard shell content type and body.
+- Assert JavaScript and CSS asset content types.
+- Assert a client-side route receives the HTML fallback.
+- Assert `/api/health` remains JSON.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+return c.body(readFileSync(candidate));
+```
+
+#### Correct
+
+```ts
+return c.body(readFileSync(candidate), 200, { 'Content-Type': contentType });
+```

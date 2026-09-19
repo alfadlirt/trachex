@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { serve } from '@hono/node-server';
 import {
@@ -17,6 +17,18 @@ import { type ApiContext, openApiContext } from './context.ts';
 import { createRoutes } from './routes.ts';
 
 const DEFAULT_DIST = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'dashboard', 'dist');
+
+const ASSET_MIME_TYPES: Record<string, string> = {
+  '.css': 'text/css',
+  '.js': 'text/javascript',
+  '.jpg': 'image/jpeg',
+  '.json': 'application/json',
+  '.mjs': 'text/javascript',
+  '.png': 'image/png',
+  '.svg': 'image/svg+xml',
+  '.webp': 'image/webp',
+  '.woff2': 'font/woff2',
+};
 
 export interface DashboardOptions {
   appDir?: string;
@@ -72,7 +84,9 @@ export function createApp(options: DashboardOptions = {}) {
       const file = url === '/' ? 'index.html' : url.slice(1);
       const candidate = join(dist, file);
       if (existsSync(candidate) && !candidate.endsWith('.html')) {
-        return c.body(readFileSync(candidate));
+        const contentType =
+          ASSET_MIME_TYPES[extname(candidate).toLowerCase()] ?? 'application/octet-stream';
+        return c.body(readFileSync(candidate), 200, { 'Content-Type': contentType });
       }
       return c.html(readFileSync(join(dist, 'index.html'), 'utf8'));
     });
