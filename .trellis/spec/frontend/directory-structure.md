@@ -54,6 +54,42 @@ apps/dashboard/
 - **`key={index}` in maps** triggers Biome `noArrayIndexKey`; use stable ids (e.g. a `useRef` counter for chat log lines).
 - **Dark-surface controls with zinc borders**: `border-zinc-600+` on `zinc-950` measures under 3:1 non-text contrast on an interactive boundary. Build filled/selected controls and text links instead of outlined buttons on dark surfaces.
 
+## Chat Stream Rendering Contract
+
+`apps/api/src/chat.ts` emits one `text` JSONL event for the assistant answer,
+then zero or more `evidence` events, followed by `done`. The dashboard must
+merge evidence into the current assistant message instead of appending one
+message per event. Evidence matching is case-insensitive and blank evidence
+sources are ignored.
+
+Chat history uses the same normalization as live responses. The lightweight
+renderer supports paragraphs, `##`/`###` headings, unordered lists, inline
+code, and bold text. Compact model output such as:
+
+```text
+It covers: - First item - Second item
+```
+
+is normalized to separate list items before rendering.
+
+### Wrong
+
+```tsx
+if (event.type === 'evidence') append('assistant', `Evidence: ${event.source}`);
+```
+
+### Correct
+
+```tsx
+if (event.type === 'evidence' && event.source?.trim()) {
+  appendEvidence(event.source);
+}
+```
+
+Evidence is presentation metadata in this stream, not a separate assistant
+turn. Keeping it in the current message prevents duplicate evidence when the
+model has already included the same reference in its answer.
+
 ---
 
 ## Landing Pages (`/`)

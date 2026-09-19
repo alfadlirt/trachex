@@ -9,6 +9,7 @@ import {
   type ProposalReviewDraft,
   type TicketCanvas,
 } from '../lib/api.ts';
+import { mergeEvidence, normalizeChatContent } from '../lib/chat-format.ts';
 import { rootRoute } from './__root.tsx';
 
 export const ticketCanvasRoute = createRoute({
@@ -773,6 +774,23 @@ function ChatPanel({ projectId, ticketKey }: { projectId: string; ticketKey: str
         createdAt: new Date().toISOString(),
       },
     ]);
+  const appendEvidence = (source: string) =>
+    setLog((prev) => {
+      const last = prev.at(-1);
+      if (last?.role !== 'assistant') {
+        return [
+          ...prev,
+          {
+            id: `local-${nextId.current++}`,
+            sessionId: 'local',
+            role: 'assistant',
+            content: mergeEvidence('', source),
+            createdAt: new Date().toISOString(),
+          },
+        ];
+      }
+      return [...prev.slice(0, -1), { ...last, content: mergeEvidence(last.content, source) }];
+    });
 
   useEffect(() => {
     api
@@ -825,7 +843,7 @@ function ChatPanel({ projectId, ticketKey }: { projectId: string; ticketKey: str
         };
         if (ev.type === 'error') throw new Error(ev.error ?? 'The assistant could not answer.');
         if (ev.type === 'text' && ev.text) append('assistant', ev.text);
-        if (ev.type === 'evidence' && ev.source) append('assistant', `Evidence: ${ev.source}`);
+        if (ev.type === 'evidence' && ev.source?.trim()) appendEvidence(ev.source);
       };
       while (true) {
         const { done, value } = await reader.read();
@@ -959,33 +977,68 @@ function ChatPanel({ projectId, ticketKey }: { projectId: string; ticketKey: str
 }
 
 function ChatMarkdown({ content }: { content: string }) {
+  const normalized = normalizeChatContent(content);
+  const blocks: Array<{ kind: 'paragraph' | 'list' | 'heading'; lines: string[] }> = [];
+  let paragraph: string[] = [];
+  let list: string[] = [];
+  const flushParagraph = () => {
+    if (paragraph.length > 0) {
+      blocks.push({ kind: 'paragraph', lines: [paragraph.join(' ')] });
+      paragraph = [];
+    }
+  };
+  const flushList = () => {
+    if (list.length > 0) {
+      blocks.push({ kind: 'list', lines: list });
+      list = [];
+    }
+  };
+
+  for (const line of normalized.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      flushParagraph();
+      flushList();
+    } else if (trimmed.startsWith('- ')) {
+      flushParagraph();
+      list.push(trimmed.slice(2));
+    } else if (/^#{2,3} /.test(trimmed)) {
+      flushParagraph();
+      flushList();
+      blocks.push({ kind: 'heading', lines: [trimmed] });
+    } else {
+      flushList();
+      paragraph.push(trimmed);
+    }
+  }
+  flushParagraph();
+  flushList();
+
   return (
-    <div className="space-y-2">
-      {content.split(/\n{2,}/).map((block) => {
-        const trimmed = block.trim();
-        if (!trimmed) return null;
-        if (trimmed.split('\n').every((line) => line.trim().startsWith('- '))) {
+    <div className="space-y-3">
+      {blocks.map((block, blockIndex) => {
+        const blockKey = `${block.kind}-${blockIndex}`;
+        if (block.kind === 'list') {
+          const listItemKeys = new Map<string, number>();
           return (
-            <ul key={trimmed} className="list-disc space-y-1 pl-5">
-              {trimmed.split('\n').map((line) => (
-                <li key={line}>{inlineMarkdown(line.slice(2))}</li>
-              ))}
+            <ul key={blockKey} className="list-disc space-y-1 pl-5">
+              {block.lines.map((line) => {
+                const occurrence = listItemKeys.get(line) ?? 0;
+                listItemKeys.set(line, occurrence + 1);
+                return <li key={`${blockKey}-${line}-${occurrence}`}>{inlineMarkdown(line)}</li>;
+              })}
             </ul>
           );
         }
-        if (trimmed.startsWith('### '))
+        const value = block.lines[0] ?? '';
+        if (block.kind === 'heading') {
           return (
-            <h5 key={trimmed} className="font-semibold text-zinc-900">
-              {inlineMarkdown(trimmed.slice(4))}
-            </h5>
-          );
-        if (trimmed.startsWith('## '))
-          return (
-            <h4 key={trimmed} className="font-semibold text-zinc-900">
-              {inlineMarkdown(trimmed.slice(3))}
+            <h4 key={blockKey} className="font-semibold text-zinc-900">
+              {inlineMarkdown(value.replace(/^#{2,3} /, ''))}
             </h4>
           );
-        return <p key={trimmed}>{inlineMarkdown(trimmed)}</p>;
+        }
+        return <p key={blockKey}>{inlineMarkdown(value)}</p>;
       })}
     </div>
   );
