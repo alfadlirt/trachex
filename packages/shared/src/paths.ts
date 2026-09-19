@@ -1,9 +1,19 @@
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export type Platform = 'darwin' | 'linux' | 'win32';
+
+function findWorkspaceRoot(start = dirname(fileURLToPath(import.meta.url))): string | null {
+  let current = start;
+  while (true) {
+    if (existsSync(join(current, 'pnpm-workspace.yaml'))) return current;
+    const parent = dirname(current);
+    if (parent === current) return null;
+    current = parent;
+  }
+}
 
 function detectPlatform(platform: NodeJS.Platform): Platform {
   switch (platform) {
@@ -22,11 +32,14 @@ export interface AppDirEnv {
   HOME?: string;
   XDG_DATA_HOME?: string;
   platform?: NodeJS.Platform;
+  workspaceRoot?: string;
 }
 
 export function trachexAppDir(env: AppDirEnv = process.env): string {
   if (env.TRACHEX_HOME && env.TRACHEX_HOME.length > 0) {
-    return env.TRACHEX_HOME;
+    return isAbsolute(env.TRACHEX_HOME)
+      ? env.TRACHEX_HOME
+      : resolve(env.workspaceRoot ?? findWorkspaceRoot() ?? process.cwd(), env.TRACHEX_HOME);
   }
   const platform = detectPlatform(env.platform ?? process.platform);
   const home = env.HOME ?? homedir();

@@ -6,6 +6,13 @@ test('TRACHEX_HOME overrides platform resolution', () => {
   assert.equal(trachexAppDir({ TRACHEX_HOME: '/tmp/tx' }), '/tmp/tx');
 });
 
+test('relative TRACHEX_HOME resolves from the workspace root', () => {
+  assert.equal(
+    trachexAppDir({ TRACHEX_HOME: '.trachex', workspaceRoot: '/workspace' }),
+    '/workspace/.trachex',
+  );
+});
+
 test('darwin app dir', () => {
   const dir = trachexAppDir({ HOME: '/Users/me', platform: 'darwin' });
   assert.equal(dir, '/Users/me/Library/Application Support/trachex');
