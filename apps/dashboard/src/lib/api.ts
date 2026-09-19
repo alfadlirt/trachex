@@ -128,7 +128,7 @@ export const api = {
       body: JSON.stringify(input),
     }),
   listTickets: (projectId: string) =>
-    request<{ tickets: Ticket[] }>(`/api/projects/${projectId}/tickets`),
+    request<{ project: Project; tickets: Ticket[] }>(`/api/projects/${projectId}/tickets`),
   getCanvas: (projectId: string, ticketKey: string) =>
     request<TicketCanvas>(`/api/projects/${projectId}/tickets/${ticketKey}`),
   getChatHistory: (projectId: string, ticketKey: string) =>

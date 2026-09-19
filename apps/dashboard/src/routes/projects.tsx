@@ -14,12 +14,14 @@ function ProjectsPage() {
   const [slug, setSlug] = useState('');
   const [name, setName] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     api
       .listProjects()
       .then((r) => setProjects(r.projects))
-      .catch((e) => setError(String(e)));
+      .catch((e) => setError(String(e)))
+      .finally(() => setLoading(false));
   }, []);
 
   const create = async () => {
@@ -37,6 +39,12 @@ function ProjectsPage() {
   return (
     <div className="dashboard-paper overflow-hidden rounded-2xl">
       <div className="border-b border-zinc-200 px-5 py-6 sm:px-8">
+        <Link
+          to="/"
+          className="inline-flex min-h-10 items-center rounded text-sm text-zinc-500 hover:text-zinc-950 hover:underline"
+        >
+          ← Back to overview
+        </Link>
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">
           Workspace index
         </p>
@@ -44,6 +52,11 @@ function ProjectsPage() {
         <p className="mt-2 max-w-xl text-sm leading-6 text-zinc-600">
           Choose a project to return to its requirements, changes, and open human decisions.
         </p>
+        {!loading && (
+          <p className="mt-4 text-xs font-medium uppercase tracking-[0.14em] text-zinc-400">
+            {projects.length} {projects.length === 1 ? 'project' : 'projects'} in this workspace
+          </p>
+        )}
       </div>
       {error && (
         <p className="mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -71,23 +84,56 @@ function ProjectsPage() {
           Create
         </button>
       </div>
-      <ul className="divide-y divide-zinc-200">
-        {projects.map((p) => (
-          <li
-            key={p.id}
-            className="bg-white px-5 py-4 transition-colors hover:bg-amber-50/40 sm:px-8"
-          >
-            <Link
-              to="/projects/$projectId"
-              params={{ projectId: p.id }}
-              className="font-medium hover:underline"
-            >
-              {p.name}
-            </Link>
-            <span className="ml-2 text-sm text-zinc-500">{p.slug}</span>
-          </li>
-        ))}
-      </ul>
+      {loading ? (
+        <p className="px-5 py-8 text-sm text-zinc-500 sm:px-8" role="status">
+          Loading projects…
+        </p>
+      ) : projects.length > 0 ? (
+        <div className="overflow-x-auto">
+          <table className="w-full table-fixed text-left text-sm">
+            <caption className="sr-only">Projects in this workspace</caption>
+            <thead className="border-b border-zinc-200 bg-zinc-50 text-xs uppercase tracking-wide text-zinc-500">
+              <tr>
+                <th scope="col" className="w-1/4 px-5 py-3 font-semibold sm:px-8">
+                  Project
+                </th>
+                <th scope="col" className="w-1/4 px-3 py-3 font-semibold">
+                  Slug
+                </th>
+                <th scope="col" className="px-3 py-3 font-semibold sm:pr-8">
+                  Description
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-200">
+              {projects.map((p) => (
+                <tr
+                  key={p.id}
+                  className="bg-white align-top transition-colors hover:bg-amber-50/40"
+                >
+                  <th scope="row" className="break-words px-5 py-4 font-medium sm:px-8">
+                    <Link
+                      to="/projects/$projectId"
+                      params={{ projectId: p.id }}
+                      className="rounded hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-500"
+                    >
+                      {p.name}
+                    </Link>
+                  </th>
+                  <td className="break-words px-3 py-4 text-zinc-600">{p.slug}</td>
+                  <td className="break-words px-3 py-4 text-zinc-600 sm:pr-8">
+                    {p.description ?? 'No description provided.'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="px-5 py-8 text-sm text-zinc-500 sm:px-8">
+          No projects yet. Create a project to start an evidence-backed workspace.
+        </p>
+      )}
     </div>
   );
 }

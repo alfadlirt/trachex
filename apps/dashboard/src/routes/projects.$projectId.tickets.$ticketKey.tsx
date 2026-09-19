@@ -114,16 +114,33 @@ function TicketCanvasPage() {
     <div className="dashboard-paper overflow-hidden rounded-2xl">
       <div className="border-b border-zinc-200 bg-zinc-50/70 px-5 py-5 sm:px-8">
         <div>
+          <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-2 text-sm">
+            <Link to="/projects" className="text-zinc-500 hover:text-zinc-950 hover:underline">
+              Projects
+            </Link>
+            <span aria-hidden="true" className="text-zinc-400">
+              /
+            </span>
+            <Link
+              to="/projects/$projectId"
+              params={{ projectId }}
+              className="text-zinc-500 hover:text-zinc-950 hover:underline"
+            >
+              {data.project.name}
+            </Link>
+            <span aria-hidden="true" className="text-zinc-400">
+              /
+            </span>
+            <span className="font-semibold text-zinc-950">{data.ticket.key}</span>
+          </nav>
           <Link
             to="/projects/$projectId"
             params={{ projectId }}
-            className="text-sm text-zinc-500 hover:text-zinc-950 hover:underline"
+            className="mt-3 inline-flex min-h-10 items-center rounded text-sm text-zinc-500 hover:text-zinc-950 hover:underline"
           >
-            {data.project.name}
+            ← Back to {data.project.name} tickets
           </Link>
-          <span className="mx-2 text-zinc-400">/</span>
-          <span className="font-semibold text-zinc-950">{data.ticket.key}</span>
-          <span className="ml-2 text-sm text-zinc-500">{data.ticket.title}</span>
+          <p className="mt-2 text-sm text-zinc-500">{data.ticket.title}</p>
         </div>
         <div className="flex gap-2">
           <button
@@ -142,6 +159,8 @@ function TicketCanvasPage() {
           </button>
         </div>
       </div>
+
+      <TicketEvidenceSummary data={data} pendingCount={pending.length} />
 
       <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_380px]">
         <div className="min-w-0 px-5 py-6 sm:px-8">
@@ -394,6 +413,50 @@ function TicketCanvasPage() {
       </div>
       <ConfirmationDialog confirmation={confirmation} onClose={() => setConfirmation(null)} />
     </div>
+  );
+}
+
+function TicketEvidenceSummary({
+  data,
+  pendingCount,
+}: {
+  data: TicketCanvas;
+  pendingCount: number;
+}) {
+  const checked = data.checklist.filter((item) => item.devStatus === 'checked').length;
+  const active = data.checklist.filter((item) => item.lifecycleStatus === 'active').length;
+  const impacts = { service: 0, api: 0, page: 0 };
+  for (const impact of data.impacts) impacts[impact.kind] += 1;
+  const metrics = [
+    { label: 'Checklist', value: `${checked}/${data.checklist.length}`, detail: 'checked' },
+    {
+      label: 'Requirements',
+      value: `${active} active`,
+      detail: 'Superseded requirements are not included in this canvas response',
+    },
+    { label: 'Review', value: String(pendingCount), detail: 'pending proposals' },
+    {
+      label: 'Impacts',
+      value: `${data.impacts.length}`,
+      detail: `${impacts.service} services · ${impacts.api} APIs · ${impacts.page} pages`,
+    },
+    { label: 'Evidence', value: String(data.timeline.length), detail: 'timeline events' },
+  ];
+
+  return (
+    <dl className="grid grid-cols-2 gap-px border-b border-zinc-200 bg-zinc-200 sm:grid-cols-3 lg:grid-cols-5">
+      {metrics.map((metric) => (
+        <div key={metric.label} className="bg-white px-4 py-4 sm:px-5">
+          <dt className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-400">
+            {metric.label}
+          </dt>
+          <dd className="mt-1 text-lg font-semibold tracking-tight text-zinc-950">
+            {metric.value}
+          </dd>
+          <dd className="mt-1 text-xs leading-4 text-zinc-500">{metric.detail}</dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 

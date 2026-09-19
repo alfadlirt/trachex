@@ -1,0 +1,2 @@
+{"file":".trellis/spec/frontend/directory-structure.md","reason":"Review route boundaries, focus states, and responsive dashboard conventions."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Check that displayed metrics remain derived from API data without contract drift."}

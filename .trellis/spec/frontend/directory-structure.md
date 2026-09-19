@@ -90,6 +90,15 @@ Evidence is presentation metadata in this stream, not a separate assistant
 turn. Keeping it in the current message prevents duplicate evidence when the
 model has already included the same reference in its answer.
 
+## Dashboard Summary Metrics
+
+Dashboard summary metrics must be derived from the arrays returned by the
+existing API client, not from placeholder values or inferred activity. The
+ticket canvas response currently provides the active checklist, proposals,
+impacts, and timeline; it does not provide superseded requirements. The UI
+must label active-only counts accurately and must not display a superseded
+count until the API exposes that data.
+
 ---
 
 ## Landing Pages (`/`)
