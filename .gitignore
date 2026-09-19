@@ -29,6 +29,7 @@ coverage/
 
 # Trachex runtime data (global app dir is outside the repo, but keep local copies ignored)
 .trachex-data/
+.trachex/
 
 # Local planning and reference material
 /prd-*.md
