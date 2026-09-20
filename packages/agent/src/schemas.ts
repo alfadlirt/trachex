@@ -22,14 +22,22 @@ export const requirementDraftSchema = z.object({
   supersedes: z.array(z.string().min(1)).nullish().default(null),
 });
 
+export const proposedOrderSchema = z.object({
+  orderedIds: z.array(z.string().min(1)).min(1),
+  rationale: z.string().min(1),
+  uncertainty: z.string().nullish().default(null),
+});
+
 export const extractionOutputSchema = z.object({
   kind: z.literal('extraction'),
   requirements: z.array(requirementDraftSchema).min(1),
+  proposedOrder: proposedOrderSchema.nullish().default(null),
 });
 
 export const reconciliationOutputSchema = z.object({
   kind: z.literal('reconciliation'),
   create: z.array(requirementDraftSchema),
+  proposedOrder: proposedOrderSchema.nullish().default(null),
 });
 
 export const proposalOutputSchema = z.discriminatedUnion('kind', [
@@ -52,11 +60,19 @@ export interface RequirementDraft {
 export interface ExtractionOutput {
   kind: 'extraction';
   requirements: RequirementDraft[];
+  proposedOrder?: ProposedOrder | null;
 }
 
 export interface ReconciliationOutput {
   kind: 'reconciliation';
   create: RequirementDraft[];
+  proposedOrder?: ProposedOrder | null;
+}
+
+export interface ProposedOrder {
+  orderedIds: string[];
+  rationale: string;
+  uncertainty?: string | null;
 }
 
 export type ProposalOutput = ExtractionOutput | ReconciliationOutput;

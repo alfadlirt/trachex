@@ -10,6 +10,7 @@ export function buildExtractionPrompt(input: { sourceType: string; attribution?:
     'Only extract what the source actually states. Do not invent requirements.',
     'Only include api or page impacts when the exact API path or page name appears in the source. Do not infer repository endpoints or pages from business behavior.',
     'List each impact value at most once per kind.',
+    ORDER_INSTRUCTION,
     `Source type: ${input.sourceType}${input.attribution ? ` (attribution: ${input.attribution})` : ''}`,
   ].join('\n');
 }
@@ -33,6 +34,21 @@ export function buildReconciliationPrompt(input: {
     'Only reflect what the note actually states.',
     'Only include api or page impacts when the exact API path or page name appears in the source. Do not infer repository endpoints or pages from business behavior.',
     'List each impact value at most once per kind.',
+    ORDER_INSTRUCTION,
     `Source type: ${input.sourceType}${input.attribution ? ` (attribution: ${input.attribution})` : ''}`,
   ].join('\n');
 }
+
+/**
+ * Shared instruction that asks the agent to rank the checklist by what a
+ * developer should implement first. The ids come from the current
+ * requirements in the user content, so `orderedIds` may only reuse those
+ * exact ids and may only claim dependencies the evidence supports.
+ */
+const ORDER_INSTRUCTION = [
+  'Also propose the checklist order a developer should follow.',
+  'Set `proposedOrder.orderedIds` to the exact ids of the current active requirements, ordered by dependency and implementation sequence (foundations before dependents, blockers before blocked work), never by title or creation order.',
+  'Explain the dependency order in `proposedOrder.rationale`.',
+  'When dependencies are unclear, list the uncertainty in `proposedOrder.uncertainty` instead of guessing.',
+  'Omit `proposedOrder` entirely when the checklist has no active requirements. This order is a proposal for human approval; it changes nothing by itself.',
+].join(' ');

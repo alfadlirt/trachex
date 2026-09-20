@@ -131,6 +131,7 @@ function normalizeOutput(output: unknown, sourceContent: string): DomainProposal
     kind: string;
     requirements?: Array<Record<string, unknown>>;
     create?: Array<Record<string, unknown>>;
+    proposedOrder?: unknown;
   };
   const cleanDraft = (draft: Record<string, unknown>) => {
     const clean: Record<string, unknown> = { title: draft.title };
@@ -151,16 +152,29 @@ function normalizeOutput(output: unknown, sourceContent: string): DomainProposal
     }
     return clean;
   };
+  const cleanOrder = (value: unknown): Record<string, unknown> | null => {
+    if (!value || typeof value !== 'object') return null;
+    const candidate = value as Record<string, unknown>;
+    const clean: Record<string, unknown> = {};
+    if (candidate.orderedIds !== undefined) clean.orderedIds = candidate.orderedIds;
+    if (candidate.rationale !== undefined) clean.rationale = candidate.rationale;
+    if (candidate.uncertainty !== undefined) clean.uncertainty = candidate.uncertainty;
+    return Object.keys(clean).length > 0 ? clean : null;
+  };
   if (raw.kind === 'extraction' && Array.isArray(raw.requirements)) {
+    const order = cleanOrder(raw.proposedOrder);
     return {
       kind: 'extraction',
       requirements: raw.requirements.map(cleanDraft),
+      ...(order ? { proposedOrder: order } : {}),
     } as unknown as DomainProposalOutput;
   }
   if (raw.kind === 'reconciliation' && Array.isArray(raw.create)) {
+    const order = cleanOrder(raw.proposedOrder);
     return {
       kind: 'reconciliation',
       create: raw.create.map(cleanDraft),
+      ...(order ? { proposedOrder: order } : {}),
     } as unknown as DomainProposalOutput;
   }
   return raw as unknown as DomainProposalOutput;
