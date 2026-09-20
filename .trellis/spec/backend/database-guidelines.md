@@ -70,7 +70,101 @@ Connection manager (`src/connection.ts`):
   `editRequirementContent` supersedes the old requirement and creates a new one
   at the same `display_order` with a fresh `manual` source; content is never
   rewritten in place.
-- `SCHEMA_VERSION` is bumped with each migration (current: 6).
+- `SCHEMA_VERSION` is bumped with each migration (current: 11).
+
+## Project/Subject Edit, Delete, and Adjustment Queue Metadata (Phase 7)
+
+### 1. Scope / Trigger
+
+The dashboard edits project/subject names and slugs, deletes them behind
+exact-name confirmation, and shows a rich adjustment queue. This requires
+code-spec depth because it spans domain services, API validation, a schema
+migration, and FK-safe cascade deletion.
+
+### 2. Signatures
+
+- Domain: `updateProject(uow, { projectId, name?, slug? })`,
+  `deleteProject(uow, { projectId, confirmName })`,
+  `updateTicket(uow, { ticketId, title?, key? })`,
+  `deleteSubjectByTicket(uow, { ticketId, confirmName })`.
+- Repository: `TicketRepository.permanentDelete?(id, force)` (optional, like
+  the project/subject variants).
+- SQLite cascade helpers in `packages/storage-sqlite/src/repositories.ts`:
+  `deleteSessionRows`, `deleteAdjustmentJobRows`, `deleteRequirementRows`,
+  `deleteProposalRows`, plus `deleteAgentScopedRows` for subject-scoped
+  `review_findings` / `agent_runs` / `evidence_references`.
+- Migration 11 `adjustment-job-file-metadata`: `ALTER TABLE adjustment_jobs
+  ADD COLUMN file_name TEXT` and `ADD COLUMN file_kind TEXT` (nullable, so
+  existing rows upgrade without data loss).
+- API canvas projection: `adjustmentJobDetails` joins each job to its
+  `sources` row; `adjustmentJobs` is kept unchanged for compatibility.
+
+### 3. Contracts
+
+- Update requests accept partial `{ name?, slug? }` / `{ title?, key? }` and
+  return the updated row; slug/key renames check uniqueness and raise
+  `ConflictError` on collision.
+- Delete requests carry `{ confirmName }` matching the exact displayed name.
+  A mismatch raises `InvalidOperationError` (mapped to HTTP 400), never a
+  silent delete.
+- `deleteSubjectByTicket` prefers the subject cascade when a subject row
+  shares the ticket id, and falls back to the ticket-level cascade so both
+  dashboard-created tickets and CLI/TUI-created subjects delete cleanly.
+- Cascade order inside one transaction: agent-scoped rows, session rows
+  (messages, then session- and proposal-linked errors, then sessions),
+  adjustment jobs, requirements (audits/impacts/scenarios, then
+  relationships, then requirements), proposals (versions, then proposals),
+  sources, export artifacts, ticket, subject where applicable.
+- Canvas response keeps `checklist` active-only and adds `superseded` plus
+  `adjustmentJobDetails`; old proposals without order data stay reviewable.
+
+### 4. Validation & Error Matrix
+
+| Condition | Result |
+| --- | --- |
+| Slug/key rename collides | `ConflictError` (HTTP 409) |
+| Delete `confirmName` mismatches | `InvalidOperationError` (HTTP 400) |
+| Delete target missing | `NotFoundError` (HTTP 404) |
+| `permanentDelete` without `force` | storage throws before touching rows |
+| Stale/unknown agent order ids | filtered to still-active seen rows; approval proceeds on the valid subset |
+
+### 5. Good/Base/Bad Cases
+
+- Good: delete chats/messages before sessions in one transaction so
+  `foreign_keys = ON` never trips on orphaned `messages.session_id`.
+- Base: nullable `file_name`/`file_kind` columns; old jobs render "No file
+  attached" instead of failing.
+- Bad: deleting sessions before messages, or sources before adjustment jobs
+  that reference them; both violate declared FK references.
+
+### 6. Tests Required
+
+- Domain: exact-name delete rejection, rename uniqueness, approval applies
+  the agent order before appending new rows.
+- Agent schema: `proposedOrder` parses with rationale/uncertainty; missing
+  rationale is rejected.
+- API: PATCH/DELETE project and ticket, reorder persistence, canvas returns
+  `superseded` and `adjustmentJobDetails`, multipart upload records
+  `fileName`/`fileKind`.
+- SQLite: migrations apply idempotently; cascade leaves no orphaned
+  messages, errors, jobs, or agent-scoped rows.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```typescript
+await db.prepare('DELETE FROM sessions WHERE ticket_id = ?').run(ticketId);
+```
+
+#### Correct
+
+```typescript
+deleteSessionRows(db, ticketId); // messages, then errors, then sessions
+```
+
+The correct path clears every dependent row before its parent inside the
+same transaction, so the FK pragma enforces intent instead of failing it.
 
 ## Common Mistakes
 

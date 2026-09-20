@@ -23,6 +23,8 @@ apps/dashboard/
     ├── lib/
     │   ├── api.ts          # typed fetch client for /api/*
     │   └── utils.ts        # cn() (clsx + tailwind-merge)
+    ├── components/
+    │   └── crud-dialogs.tsx  # DangerConfirmDialog + SimpleEditDialog (native dialog)
     └── routes/
         ├── __root.tsx      # layout (header + Outlet); bare Outlet on the landing route
         ├── index.tsx       # landing page (/)
@@ -56,8 +58,11 @@ apps/dashboard/
 
 ## Chat Stream Rendering Contract
 
-`apps/api/src/chat.ts` emits one `text` JSONL event for the assistant answer,
-then zero or more `evidence` events, followed by `done`. The dashboard must
+`apps/api/src/chat.ts` emits a `start` JSONL event that now carries the
+created `sessionId` (lazy session creation on first message), followed by one
+`text` event for the assistant answer, then zero or more `evidence` events,
+followed by `done`. The dashboard must adopt the `sessionId` from the `start`
+event so the reply lands in history and follow-ups stay in one thread. It must
 merge evidence into the current assistant message instead of appending one
 message per event. Evidence matching is case-insensitive and blank evidence
 sources are ignored.
@@ -94,10 +99,10 @@ model has already included the same reference in its answer.
 
 Dashboard summary metrics must be derived from the arrays returned by the
 existing API client, not from placeholder values or inferred activity. The
-ticket canvas response currently provides the active checklist, proposals,
-impacts, and timeline; it does not provide superseded requirements. The UI
-must label active-only counts accurately and must not display a superseded
-count until the API exposes that data.
+ticket canvas response provides the active checklist, proposals, impacts,
+timeline, `superseded` entries, and `adjustmentJobDetails`. Counts stay
+active-only; the superseded section is separate evidence and never enters the
+completion count or pagination.
 
 ---
 
@@ -129,6 +134,7 @@ function RootLayout() {
 
 ### Conventions
 
-- **Modal panel**: native `<dialog>` + `showModal()`/`close()` driven by a `useEffect` on the `open` prop; sync React state via the dialog `close` event (gives Escape and focus trapping for free). Style `dialog::backdrop` in `index.css` (Tailwind utilities cannot target it). Do not use `backdrop-filter`.
+- **Modal panel**: native `<dialog>` + `showModal()`/`close()` driven by a `useEffect` on the `open` prop; sync React state via the dialog `close` event (gives Escape and focus trapping for free). Style `dialog::backdrop` in `index.css` (Tailwind utilities cannot target it). Do not use `backdrop-filter`. Shared edit/danger dialogs live in `src/components/crud-dialogs.tsx`; danger dialogs stay disabled until the typed name exactly matches the target.
+- **Checklist rows**: one 44px flex row holds grip, position number, and check control (`items-center`); the title block aligns by top padding, not per-control `mt-*` offsets. Secondary up/down buttons sit side by side so rows keep a stable height.
 - **Reduced motion**: Tailwind `motion-safe:` / `motion-reduce:` variants gate `transition-colors`; entrance/selection keyframes live in `index.css` and are disabled under `@media (prefers-reduced-motion: reduce)`.
 - **Copy discipline**: landing copy comes from `copy.md` with light edits, zero em dashes, and example timeline content is labelled "Example walkthrough, not real project data." Never imply fabricated customers, metrics, or package availability (the CLI is not published; `npx trachex init` is shown as inert text only).

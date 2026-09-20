@@ -38,6 +38,8 @@ canonical data: the pipeline writes an `ErrorRecord` (via
 | --- | --- |
 | Project slug already exists | `ConflictError` |
 | Ticket key already exists in project | `ConflictError` |
+| Project/subject slug or key rename collides | `ConflictError` |
+| Delete confirmation name does not match | `InvalidOperationError` |
 | Entity not found | `NotFoundError` |
 | Proposal not pending (approve/reject/edit) | `InvalidOperationError` |
 | Ticket belongs to another project (ingest) | `ScopingError` |
