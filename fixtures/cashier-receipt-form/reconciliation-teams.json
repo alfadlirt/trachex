@@ -1,0 +1,22 @@
+{
+  "kind": "reconciliation",
+  "create": [
+    {
+      "title": "Batas waktu koreksi invoice final 10 hari kalender",
+      "description": "Batas waktu pengajuan koreksi invoice dikunci final menjadi 10 hari kalender sejak EOD closing sesuai audit pajak.",
+      "sourceLocation": "thread",
+      "parentLabel": "Koreksi Invoice",
+      "supersedes": ["req-crf-correction-window-14d"],
+      "impacts": [{ "kind": "service", "value": "billing-service" }],
+      "scenarios": ["Pengajuan koreksi invoice pada hari ke-10 diterima, dan pada hari ke-11 ditolak sistem"]
+    },
+    {
+      "title": "Larangan pengembalian tunai untuk koreksi pembayaran voucher",
+      "description": "Koreksi invoice yang mengandung komponen voucher dilarang di-refund secara kas fisik tunai; wajib terbit voucher/credit note.",
+      "sourceLocation": "thread",
+      "parentLabel": "Kebijakan Pembayaran Khusus",
+      "impacts": [{ "kind": "service", "value": "billing-service" }],
+      "scenarios": ["Sistem menolak pengembalian selisih voucher ke kas tunai fisik"]
+    }
+  ]
+}

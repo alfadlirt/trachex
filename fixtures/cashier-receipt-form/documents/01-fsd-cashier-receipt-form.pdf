@@ -1,0 +1,107 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 3 0 R /Outlines 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Outlines /Count 0 >>
+endobj
+3 0 obj
+<< /Type /Pages /Kids [ 6 0 R ] /Count 1 >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>
+endobj
+6 0 obj
+<< /Type /Page /Parent 3 0 R /MediaBox [ 0 0 612 792 ] /Contents 7 0 R /Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> >>
+endobj
+7 0 obj
+<< /Length 2435 >>
+stream
+BT
+/F2 18 Tf
+50 740 Td
+(FUNCTIONAL SPECIFICATION DOCUMENT \(FSD\)) Tj
+/F2 13 Tf
+0 -24 Td
+(Modul: Cashier Receipt Form \(CRF\) & Rekonsiliasi Kasir) Tj
+/F1 10 Tf
+0 -18 Td
+(Nomor Dokumen: FSD-MEDIKA-CRF-001 | Tiket: CRF-201) Tj
+0 -14 Td
+(Author: Danang Prasetyo \(Product Lead\) | Tanggal: 10 Agustus 2025) Tj
+0 -14 Td
+(Target: Sprint 24 - Core Billing & Cashier Microservices) Tj
+/F2 12 Tf
+0 -28 Td
+(1. LATAR BELAKANG & OBJECTIVE) Tj
+/F1 10 Tf
+0 -18 Td
+(Setiap kasir klinik yang masuk shift kerja wajib buka dan tutup kasir pakai Cashier Receipt Form \(CRF\).) Tj
+0 -14 Td
+(CRF berfungsi sebagai kontrol internal agar kas tidak tekor dan rekonsiliasi pembayaran fisik vs sistem klop.) Tj
+0 -14 Td
+(Sistem otomatis mengkalkulasi dan merekonsiliasi pembayaran tunai \(cash\) maupun non-tunai.) Tj
+/F2 12 Tf
+0 -24 Td
+(2. BUSINESS RULES & INITIAL REQUIREMENTS) Tj
+/F2 10 Tf
+0 -18 Td
+(2.1 Buka Shift & CRF Owner Restriction) Tj
+/F1 10 Tf
+0 -14 Td
+(- Kasir wajib input nominal Initial Deposit \(modal awal kembalian\) saat membuka shift.) Tj
+0 -14 Td
+(- Isolasi akses: Hanya kasir pemilik yang boleh ubah data dan close CRF miliknya \(Owner Restriction\).) Tj
+/F2 10 Tf
+0 -18 Td
+(2.2 Pencatatan Transaksi Multi-Channel) Tj
+/F1 10 Tf
+0 -14 Td
+(- Support payment method: Cash, QRIS, Kartu Debit, Kartu Kredit, Xendit, dan Voucher klinik.) Tj
+0 -14 Td
+(- Sistem otomatis menghitung total akumulasi penerimaan per payment method ke summary CRF.) Tj
+/F2 10 Tf
+0 -18 Td
+(2.3 Tutup Shift & Alur Koreksi Invoice Pasca EOD Closing) Tj
+/F1 10 Tf
+0 -14 Td
+(- Kasir melakukan closing CRF di akhir shift, dilanjutkan proses EOD Closing harian klinik.) Tj
+0 -14 Td
+(- Koreksi invoice setelah EOD closing dapat diajukan kasir maksimal 7 hari kalender \(Correction Window\).) Tj
+0 -14 Td
+(- Pengajuan koreksi invoice wajib di-approve oleh Finance Supervisor.) Tj
+0 -14 Td
+(- Jika di-approve, invoice dan CRF beralih status ke Under Revision untuk rekonsiliasi ulang kasir.) Tj
+/F2 11 Tf
+0 -26 Td
+(3. ACCEPTANCE CRITERIA) Tj
+/F1 10 Tf
+0 -16 Td
+(AC-1: Validasi initial deposit wajib diisi dan bernilai positif sebelum shift dibuka.) Tj
+0 -14 Td
+(AC-2: Percobaan akses edit/tutup CRF oleh kasir lain di-reject dengan error 403 Forbidden.) Tj
+0 -14 Td
+(AC-3: Pengajuan koreksi invoice lewat dari 7 hari kalender di-reject sistem secara otomatis.) Tj
+0 -14 Td
+(AC-4: Invoice dan CRF berstatus Under Revision sebelum kasir menyelesaikan verifikasi re-close.) Tj
+ET
+endstream
+endobj
+xref
+0 8
+0000000000 65535 f 
+0000000009 00000 n 
+0000000074 00000 n 
+0000000120 00000 n 
+0000000179 00000 n 
+0000000276 00000 n 
+0000000378 00000 n 
+0000000516 00000 n 
+trailer
+<< /Size 8 /Root 1 0 R >>
+startxref
+3003
+%%EOF

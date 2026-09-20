@@ -1,0 +1,22 @@
+{
+  "kind": "reconciliation",
+  "create": [
+    {
+      "title": "Perpanjangan batas waktu koreksi invoice menjadi 14 hari kerja",
+      "description": "Batas waktu pengajuan koreksi invoice diubah menjadi 14 hari kerja untuk mengakomodasi jadwal rekonsiliasi klaim cabang.",
+      "sourceLocation": "poin-diskusi",
+      "parentLabel": "Koreksi Invoice",
+      "supersedes": ["req-crf-correction-window-7d"],
+      "impacts": [{ "kind": "service", "value": "billing-service" }],
+      "scenarios": ["Pengajuan koreksi pada hari kerja ke-14 diterima"]
+    },
+    {
+      "title": "Approval dinamis koreksi invoice via General Setup",
+      "description": "Persetujuan koreksi invoice dikonfigurasi dinamis berbasis role per cabang melalui General Setup, tidak hardcoded.",
+      "sourceLocation": "poin-diskusi",
+      "parentLabel": "Persetujuan & Kebijakan",
+      "impacts": [{ "kind": "service", "value": "general-setup-service" }],
+      "scenarios": ["Klinik cabang satelit menggunakan role Head of Cashier untuk approval koreksi"]
+    }
+  ]
+}

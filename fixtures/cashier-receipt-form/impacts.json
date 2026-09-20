@@ -1,0 +1,62 @@
+[
+  {
+    "id": "impact-1",
+    "requirementId": "req-crf-deposit-initial",
+    "kind": "page",
+    "value": "/cashier/crf/create"
+  },
+  {
+    "id": "impact-2",
+    "requirementId": "req-crf-deposit-initial",
+    "kind": "service",
+    "value": "cashier-service"
+  },
+  {
+    "id": "impact-3",
+    "requirementId": "req-crf-owner-restriction",
+    "kind": "api",
+    "value": "PUT /api/v1/cashier-receipts/:id"
+  },
+  {
+    "id": "impact-4",
+    "requirementId": "req-crf-multi-payment",
+    "kind": "service",
+    "value": "payment-gateway-adapter"
+  },
+  {
+    "id": "impact-5",
+    "requirementId": "req-crf-multi-payment",
+    "kind": "service",
+    "value": "billing-service"
+  },
+  {
+    "id": "impact-6",
+    "requirementId": "req-crf-under-revision-status",
+    "kind": "api",
+    "value": "POST /api/v1/invoices/:id/approve-correction"
+  },
+  {
+    "id": "impact-7",
+    "requirementId": "req-crf-dynamic-role-approval",
+    "kind": "service",
+    "value": "general-setup-service"
+  },
+  {
+    "id": "impact-8",
+    "requirementId": "req-crf-correction-window-10d",
+    "kind": "service",
+    "value": "billing-service"
+  },
+  {
+    "id": "impact-9",
+    "requirementId": "req-crf-voucher-no-cash-refund",
+    "kind": "service",
+    "value": "billing-service"
+  },
+  {
+    "id": "impact-10",
+    "requirementId": "req-crf-shift-lock-on-revision",
+    "kind": "page",
+    "value": "/cashier/crf/create"
+  }
+]

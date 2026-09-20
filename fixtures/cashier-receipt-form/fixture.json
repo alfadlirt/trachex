@@ -8,8 +8,10 @@
   "proposals": "proposals.json",
   "expectedFindings": "expected-findings.json",
   "documents": [
-    "documents/initial-fsd.md",
-    "documents/clarification.md",
-    "documents/uat-feedback.md"
+    "documents/01-fsd-cashier-receipt-form.pdf",
+    "documents/01-fsd-cashier-receipt-form.md",
+    "documents/02-mom-alignment-finance.md",
+    "documents/03-teams-ba-confirmation.md",
+    "documents/04-uat-feedback-ops.md"
   ]
 }

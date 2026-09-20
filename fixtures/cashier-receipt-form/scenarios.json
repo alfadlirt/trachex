@@ -1,0 +1,50 @@
+[
+  {
+    "id": "scenario-deposit-check",
+    "requirementId": "req-crf-deposit-initial",
+    "title": "Kasir mengisi modal awal sebelum shift aktif",
+    "reviewed": true
+  },
+  {
+    "id": "scenario-owner-forbidden",
+    "requirementId": "req-crf-owner-restriction",
+    "title": "Kasir B ditolak saat mencoba mengedit formulir CRF milik Kasir A",
+    "reviewed": true
+  },
+  {
+    "id": "scenario-multi-payment-sum",
+    "requirementId": "req-crf-multi-payment",
+    "title": "Akumulasi pembayaran tunai, QRIS, debit terhitung akurat pada ringkasan shift",
+    "reviewed": true
+  },
+  {
+    "id": "scenario-under-revision-cascade",
+    "requirementId": "req-crf-under-revision-status",
+    "title": "Approval koreksi invoice mengubah status CRF dan invoice menjadi Under Revision",
+    "reviewed": true
+  },
+  {
+    "id": "scenario-window-10d-boundary",
+    "requirementId": "req-crf-correction-window-10d",
+    "title": "Pengajuan koreksi invoice pada hari ke-10 diterima, dan pada hari ke-11 ditolak sistem",
+    "reviewed": true
+  },
+  {
+    "id": "scenario-dynamic-role-branch",
+    "requirementId": "req-crf-dynamic-role-approval",
+    "title": "Klinik cabang satelit menggunakan role Head of Cashier untuk approval koreksi",
+    "reviewed": true
+  },
+  {
+    "id": "scenario-voucher-refund-rejected",
+    "requirementId": "req-crf-voucher-no-cash-refund",
+    "title": "Sistem menolak pengembalian selisih voucher ke kas tunai fisik",
+    "reviewed": true
+  },
+  {
+    "id": "scenario-shift-lock-pending",
+    "requirementId": "req-crf-shift-lock-on-revision",
+    "title": "Kasir tidak dapat menekan tombol Buat CRF Baru jika ada CRF berstatus Under Revision",
+    "reviewed": false
+  }
+]

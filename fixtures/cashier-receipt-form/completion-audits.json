@@ -1,0 +1,47 @@
+[
+  {
+    "id": "audit-crf-1",
+    "requirementId": "req-crf-deposit-initial",
+    "actorType": "human",
+    "actorId": "dev-rian",
+    "note": "Validasi form modal awal kasir dan schema DB migration selesai dan diuji di dev.",
+    "action": "check",
+    "checkedAt": "2025-08-15T14:00:00.000Z"
+  },
+  {
+    "id": "audit-crf-2",
+    "requirementId": "req-crf-owner-restriction",
+    "actorType": "human",
+    "actorId": "dev-rian",
+    "note": "Middleware otorisasi JWT claim user_id vs crf.cashier_id terverifikasi.",
+    "action": "check",
+    "checkedAt": "2025-08-15T14:00:00.000Z"
+  },
+  {
+    "id": "audit-crf-3",
+    "requirementId": "req-crf-multi-payment",
+    "actorType": "human",
+    "actorId": "dev-rian",
+    "note": "Aggregator pembayaran multi-metode lulus unit test perhitungan.",
+    "action": "check",
+    "checkedAt": "2025-08-15T14:00:00.000Z"
+  },
+  {
+    "id": "audit-crf-4",
+    "requirementId": "req-crf-under-revision-status",
+    "actorType": "human",
+    "actorId": "dev-rian",
+    "note": "State transition invoice dan CRF 'Under Revision' terverifikasi via integration test.",
+    "action": "check",
+    "checkedAt": "2025-08-15T14:00:00.000Z"
+  },
+  {
+    "id": "audit-crf-5",
+    "requirementId": "req-crf-correction-window-7d",
+    "actorType": "human",
+    "actorId": "dev-rian",
+    "note": "Batas 7 hari kalender sempat diimplementasikan dan di-centang sebelum adanya MoM alignment.",
+    "action": "check",
+    "checkedAt": "2025-08-15T14:00:00.000Z"
+  }
+]

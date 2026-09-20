@@ -1,0 +1,37 @@
+{
+  "project": {
+    "id": "project-medika-core",
+    "name": "Medika Core Clinic System",
+    "description": "Sistem microservices manajemen klinik kesehatan terintegrasi: billing, kasir, farmasi, dan rekonsiliasi keuangan.",
+    "createdAt": "2025-08-01T08:00:00.000Z"
+  },
+  "tickets": [
+    {
+      "id": "ticket-crf-core",
+      "projectId": "project-medika-core",
+      "key": "CRF-201",
+      "title": "Formulir Penerimaan Kasir & Penutupan Shift Harian",
+      "description": "Implementasi modul Cashier Receipt Form (CRF) awal mencakup modal awal, transaksi multi-metode, penutupan shift, dan koreksi invoice 7 hari.",
+      "status": "in_progress",
+      "createdAt": "2025-08-10T09:00:00.000Z"
+    },
+    {
+      "id": "ticket-crf-approval",
+      "projectId": "project-medika-core",
+      "key": "CRF-214",
+      "title": "Dinamisasi Role Approval Koreksi Invoice & Perubahan Batas Waktu",
+      "description": "Penyelarasan kebijakan batas waktu koreksi invoice pasca-EOD dan konfigurasi approval dinamis per cabang klinik.",
+      "status": "ready_for_dev",
+      "createdAt": "2025-08-18T16:00:00.000Z"
+    },
+    {
+      "id": "ticket-crf-uat",
+      "projectId": "project-medika-core",
+      "key": "CRF-225",
+      "title": "Temuan UAT: Penguncian Shift Kasir Saat Revisi & Validasi Split Payment",
+      "description": "Feedback pengujian UAT di klinik terkait pencegahan pembukaan shift baru saat revisi menggantung dan audit trail selisih fisik.",
+      "status": "open",
+      "createdAt": "2025-09-04T17:00:00.000Z"
+    }
+  ]
+}

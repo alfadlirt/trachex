@@ -1,0 +1,99 @@
+[
+  {
+    "id": "proposal-extraction-crf-fsd",
+    "ticketId": "ticket-crf-core",
+    "kind": "extraction",
+    "status": "approved",
+    "sourceId": "source-fsd-crf-pdf",
+    "output": {
+      "kind": "extraction",
+      "requirements": [
+        {
+          "title": "Wajib input saldo modal awal kasir",
+          "description": "Kasir wajib mengisi saldo modal awal saat membuka shift.",
+          "sourceLocation": "aturan-bisnis",
+          "parentLabel": "Pembukaan Shift",
+          "impacts": [{ "kind": "page", "value": "/cashier/crf/create" }],
+          "scenarios": ["Kasir mengisi modal awal sebelum shift aktif"]
+        },
+        {
+          "title": "Isolasi akses perubahan dan penutupan CRF",
+          "description": "Hanya kasir pemilik yang dapat mengubah dan menutup CRF miliknya.",
+          "sourceLocation": "aturan-bisnis",
+          "parentLabel": "Keamanan & Hak Akses",
+          "impacts": [{ "kind": "api", "value": "PUT /api/v1/cashier-receipts/:id" }],
+          "scenarios": ["Kasir B ditolak saat mencoba mengedit formulir CRF milik Kasir A"]
+        },
+        {
+          "title": "Batas waktu koreksi invoice maksimal 7 hari kalender",
+          "description": "Koreksi invoice paska-EOD closing dapat diajukan kasir maksimal dalam kurun waktu 7 hari kalender.",
+          "sourceLocation": "aturan-bisnis",
+          "parentLabel": "Koreksi Invoice",
+          "impacts": [{ "kind": "service", "value": "billing-service" }],
+          "scenarios": ["Koreksi invoice setelah closing melebihi 7 hari ditolak"]
+        }
+      ]
+    },
+    "createdAt": "2025-08-11T10:00:00.000Z"
+  },
+  {
+    "id": "proposal-reconciliation-mom",
+    "ticketId": "ticket-crf-core",
+    "kind": "reconciliation",
+    "status": "approved",
+    "sourceId": "source-mom-alignment",
+    "output": {
+      "kind": "reconciliation",
+      "create": [
+        {
+          "title": "Perpanjangan batas waktu koreksi invoice menjadi 14 hari kerja",
+          "description": "Batas waktu koreksi diperpanjang menjadi 14 hari kerja.",
+          "sourceLocation": "poin-diskusi",
+          "parentLabel": "Koreksi Invoice",
+          "supersedes": ["req-crf-correction-window-7d"],
+          "impacts": [{ "kind": "service", "value": "billing-service" }],
+          "scenarios": ["Pengajuan koreksi pada hari kerja ke-14 diterima"]
+        },
+        {
+          "title": "Approval dinamis koreksi invoice via General Setup",
+          "description": "Konfigurasi role approver per cabang melalui General Setup.",
+          "sourceLocation": "poin-diskusi",
+          "parentLabel": "Persetujuan & Kebijakan",
+          "impacts": [{ "kind": "service", "value": "general-setup-service" }],
+          "scenarios": ["Klinik cabang satelit menggunakan role Head of Cashier untuk approval koreksi"]
+        }
+      ]
+    },
+    "createdAt": "2025-08-19T08:30:00.000Z"
+  },
+  {
+    "id": "proposal-reconciliation-teams",
+    "ticketId": "ticket-crf-core",
+    "kind": "reconciliation",
+    "status": "pending",
+    "sourceId": "source-teams-confirmation",
+    "output": {
+      "kind": "reconciliation",
+      "create": [
+        {
+          "title": "Batas waktu koreksi invoice final 10 hari kalender",
+          "description": "Batas waktu pengajuan koreksi invoice dikunci final menjadi 10 hari kalender sejak EOD closing.",
+          "sourceLocation": "thread",
+          "parentLabel": "Koreksi Invoice",
+          "supersedes": ["req-crf-correction-window-14d"],
+          "impacts": [{ "kind": "service", "value": "billing-service" }],
+          "scenarios": ["Pengajuan koreksi invoice pada hari ke-10 diterima, dan pada hari ke-11 ditolak sistem"]
+        },
+        {
+          "title": "Larangan pengembalian tunai untuk koreksi pembayaran voucher",
+          "description": "Koreksi transaksi voucher wajib diterbitkan credit note/voucher pengganti.",
+          "sourceLocation": "thread",
+          "parentLabel": "Kebijakan Pembayaran Khusus",
+          "impacts": [{ "kind": "service", "value": "billing-service" }],
+          "scenarios": ["Sistem menolak pengembalian selisih voucher ke kas tunai fisik"]
+        }
+      ]
+    },
+    "createdAt": "2025-08-25T11:00:00.000Z"
+  }
+]

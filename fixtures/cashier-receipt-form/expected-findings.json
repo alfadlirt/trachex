@@ -1,0 +1,78 @@
+[
+  {
+    "id": "finding-correction-window-conflict",
+    "subjectId": "ticket-crf-core",
+    "kind": "report",
+    "severity": "high",
+    "confidence": 0.99,
+    "summary": "Konflik batas waktu koreksi invoice: FSD awal (7 hari kalender), MoM (14 hari kerja), dan konfirmasi Teams (10 hari kalender).",
+    "evidence": [
+      "source-fsd-crf-pdf",
+      "source-mom-alignment",
+      "source-teams-confirmation",
+      "req-crf-correction-window-7d",
+      "req-crf-correction-window-14d",
+      "req-crf-correction-window-10d"
+    ],
+    "affectedRequirementId": "req-crf-correction-window-10d",
+    "affectedRepositoryId": null,
+    "suggestedAction": "Pastikan sistem menggunakan batas final 10 hari kalender dan menandai versi 7 hari dan 14 hari sebagai superseded.",
+    "status": "pending",
+    "runId": "crf-eval-run-1",
+    "createdAt": "2025-09-06T10:00:00.000Z"
+  },
+  {
+    "id": "finding-stale-check-audit",
+    "subjectId": "ticket-crf-core",
+    "kind": "report",
+    "severity": "medium",
+    "confidence": 0.97,
+    "summary": "Requirement batas waktu koreksi 7 hari pernah di-centang (checked) oleh developer namun telah di-supersede oleh aturan baru.",
+    "evidence": [
+      "audit-crf-5",
+      "req-crf-correction-window-7d"
+    ],
+    "affectedRequirementId": "req-crf-correction-window-7d",
+    "affectedRepositoryId": null,
+    "suggestedAction": "Tampilkan audit completion pada riwayat superseded dan jangan hitung sebagai progress aktif tiket.",
+    "status": "pending",
+    "runId": "crf-eval-run-1",
+    "createdAt": "2025-09-06T10:00:00.000Z"
+  },
+  {
+    "id": "finding-missing-split-payment-scenario",
+    "subjectId": "ticket-crf-core",
+    "kind": "scenario",
+    "severity": "high",
+    "confidence": 0.95,
+    "summary": "Requirement penyesuaian split payment aktif tanpa memiliki satupun test scenario.",
+    "evidence": [
+      "source-uat-feedback",
+      "req-crf-split-payment-handling"
+    ],
+    "affectedRequirementId": "req-crf-split-payment-handling",
+    "affectedRepositoryId": null,
+    "suggestedAction": "Buat skenario pengujian BDD untuk alur revisi parsial split payment (tunai vs QRIS/kartu).",
+    "status": "pending",
+    "runId": "crf-eval-run-1",
+    "createdAt": "2025-09-06T10:00:00.000Z"
+  },
+  {
+    "id": "finding-unreviewed-shift-lock-scenario",
+    "subjectId": "ticket-crf-core",
+    "kind": "scenario",
+    "severity": "medium",
+    "confidence": 0.92,
+    "summary": "Skenario penguncian pembukaan shift baru kasir saat ada CRF Under Revision belum direview.",
+    "evidence": [
+      "scenario-shift-lock-pending",
+      "req-crf-shift-lock-on-revision"
+    ],
+    "affectedRequirementId": "req-crf-shift-lock-on-revision",
+    "affectedRepositoryId": null,
+    "suggestedAction": "Lakukan review skenario shift-lock-pending bersama QA dan tim operasional kasir klinik.",
+    "status": "pending",
+    "runId": "crf-eval-run-1",
+    "createdAt": "2025-09-06T10:00:00.000Z"
+  }
+]

@@ -1,0 +1,46 @@
+[
+  {
+    "id": "source-fsd-crf-pdf",
+    "ticketId": "ticket-crf-core",
+    "type": "fsd",
+    "attribution": "Danang Prasetyo (Lead Product Manager)",
+    "sourceEventAt": "2025-08-10T09:00:00.000Z",
+    "ingestedAt": "2025-08-11T10:00:00.000Z",
+    "location": "documents/01-fsd-cashier-receipt-form.pdf#aturan-bisnis",
+    "snapshotId": null,
+    "note": "Dokumen FSD resmi spesifikasi CRF awal dan batas koreksi invoice 7 hari kalender."
+  },
+  {
+    "id": "source-mom-alignment",
+    "ticketId": "ticket-crf-core",
+    "type": "clarification",
+    "attribution": "Danang Prasetyo & Bambang Sudjatmiko",
+    "sourceEventAt": "2025-08-18T15:30:00.000Z",
+    "ingestedAt": "2025-08-19T08:30:00.000Z",
+    "location": "documents/02-mom-alignment-finance.md#poin-diskusi",
+    "snapshotId": null,
+    "note": "Hasil rapat alignment Finance: usulan batas waktu koreksi 14 hari kerja dan dynamic role approval."
+  },
+  {
+    "id": "source-teams-confirmation",
+    "ticketId": "ticket-crf-core",
+    "type": "clarification",
+    "attribution": "Siti Rahma (BA) & Bambang Sudjatmiko (Head of Finance)",
+    "sourceEventAt": "2025-08-25T10:05:00.000Z",
+    "ingestedAt": "2025-08-25T11:00:00.000Z",
+    "location": "documents/03-teams-ba-confirmation.md#thread",
+    "snapshotId": null,
+    "note": "Konfirmasi resmi via Teams: batas waktu koreksi final dikunci 10 hari kalender dan pelarangan refund voucher tunai."
+  },
+  {
+    "id": "source-uat-feedback",
+    "ticketId": "ticket-crf-core",
+    "type": "uat",
+    "attribution": "Nurul Anisa (Clinic Ops) & Farhan Maulana (QA)",
+    "sourceEventAt": "2025-09-04T16:00:00.000Z",
+    "ingestedAt": "2025-09-05T09:00:00.000Z",
+    "location": "documents/04-uat-feedback-ops.md#findings",
+    "snapshotId": null,
+    "note": "Temuan UAT lapangan: penguncian shift kasir saat CRF Under Revision dan gap skenario split payment."
+  }
+]
