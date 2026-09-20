@@ -17,6 +17,7 @@ import {
   resetProposal,
   serializeJson,
   serializeMarkdown,
+  uncheckRequirement,
   updateProject,
   updateTicket,
 } from '@trachex/domain';
@@ -467,6 +468,20 @@ export function createRoutes(deps: RouteDeps): Hono {
         actorType: 'human',
       });
       return c.json({ requirementId: c.req.param('requirementId'), status: 'checked', audit });
+    } catch (error) {
+      return c.json(errorPayload(error), statusForError(error));
+    }
+  });
+
+  app.post('/requirements/:requirementId/uncheck', async (c) => {
+    try {
+      const body = checkSchema.parse(await c.req.json());
+      void body;
+      const audit = await uncheckRequirement(ctx.uow, {
+        requirementId: c.req.param('requirementId'),
+        actorType: 'human',
+      });
+      return c.json({ requirementId: c.req.param('requirementId'), status: 'unchecked', audit });
     } catch (error) {
       return c.json(errorPayload(error), statusForError(error));
     }

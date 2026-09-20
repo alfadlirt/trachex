@@ -209,6 +209,33 @@ test('POST requirements/check requires confirm:true', async () => {
   }
 });
 
+test('POST requirements/uncheck marks a checked requirement incomplete', async () => {
+  const { appDir, ctx, ticket, app } = await setup();
+  try {
+    const { addRequirementManual, checkRequirement } = await import('@trachex/domain');
+    const requirement = await addRequirementManual(ctx.uow, {
+      ticketId: ticket.id,
+      title: 'Verify checkout total',
+      actorType: 'human',
+    });
+    await checkRequirement(ctx.uow, { requirementId: requirement.id, actorType: 'human' });
+
+    const res = await app.request(`/api/requirements/${requirement.id}/uncheck`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ confirm: true }),
+    });
+
+    assert.equal(res.status, 200);
+    const body = (await res.json()) as { status: string };
+    assert.equal(body.status, 'unchecked');
+    assert.equal((await ctx.uow.requirements.findById(requirement.id))?.devStatus, 'unchecked');
+  } finally {
+    ctx.db.close();
+    rmSync(appDir, { recursive: true, force: true });
+  }
+});
+
 test('GET export returns markdown summary', async () => {
   const { appDir, ctx, project, ticket, app } = await setup();
   try {

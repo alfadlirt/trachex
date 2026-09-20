@@ -173,6 +173,18 @@ function TicketCanvasPage() {
     });
   };
 
+  const uncheck = async (requirementId: string) => {
+    setConfirmation({
+      title: 'Mark requirement incomplete?',
+      message: 'This records a human change and keeps the uncheck action in the audit history.',
+      confirmLabel: 'Mark incomplete',
+      onConfirm: async () => {
+        await api.uncheckRequirement(requirementId);
+        load();
+      },
+    });
+  };
+
   const approve = async (proposalId: string) => {
     setConfirmation({
       title: 'Approve this proposal?',
@@ -411,12 +423,12 @@ function TicketCanvasPage() {
                   </span>
                   <button
                     type="button"
-                    onClick={() => check(r.id)}
+                    onClick={() => (r.devStatus === 'checked' ? uncheck(r.id) : check(r.id))}
                     className="flex min-h-11 min-w-11 shrink-0 items-center justify-center text-zinc-400 hover:text-zinc-900"
-                    title={r.devStatus === 'checked' ? 'Checked' : 'Mark complete'}
+                    title={r.devStatus === 'checked' ? 'Mark incomplete' : 'Mark complete'}
                     aria-label={
                       r.devStatus === 'checked'
-                        ? `Checked: ${r.title}`
+                        ? `Mark incomplete: ${r.title}`
                         : `Mark complete: ${r.title}`
                     }
                   >
@@ -1076,10 +1088,7 @@ function AdjustmentComposer({
       </p>
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         <div className="space-y-1">
-          <label
-            className="block text-sm font-medium leading-5"
-            htmlFor="adjustment-source"
-          >
+          <label className="block text-sm font-medium leading-5" htmlFor="adjustment-source">
             Source category
           </label>
 
@@ -1107,12 +1116,8 @@ function AdjustmentComposer({
         </div>
 
         <div className="space-y-1">
-          <label
-            className="block text-sm font-medium leading-5"
-            htmlFor="adjustment-attribution"
-          >
-            Attribution{" "}
-            <span className="font-normal text-zinc-500">(optional)</span>
+          <label className="block text-sm font-medium leading-5" htmlFor="adjustment-attribution">
+            Attribution <span className="font-normal text-zinc-500">(optional)</span>
           </label>
 
           <input

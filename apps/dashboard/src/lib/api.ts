@@ -304,6 +304,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ confirm: true }),
     }),
+  uncheckRequirement: (requirementId: string) =>
+    request<{ status: string }>(`/api/requirements/${requirementId}/uncheck`, {
+      method: 'POST',
+      body: JSON.stringify({ confirm: true }),
+    }),
   exportSummary: (projectId: string, ticketKey: string, format: 'markdown' | 'json') =>
     fetch(`/api/projects/${projectId}/tickets/${ticketKey}/export?format=${format}`).then((r) =>
       r.text(),
