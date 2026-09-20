@@ -1,0 +1,4 @@
+{"file":".trellis/spec/backend/error-handling.md","reason":"Apply the repository's error classification and safe failure conventions at the API, queue, and worker boundaries."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Verify dependency boundaries, tests, and minimal backend changes."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Trace the API, Redis, worker, SQLite, provider, and dashboard contracts without conflating failure domains."}
+{"file":".trellis/tasks/09-20-async-adjustment-reconciliation/design.md","reason":"Reuse the existing queue contract and async adjustment design while investigating the new failure boundary."}

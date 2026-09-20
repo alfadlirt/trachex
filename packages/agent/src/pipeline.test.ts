@@ -285,3 +285,41 @@ test('agent output is never applied directly (no requirements created by pipelin
   assert.equal(uow.data.proposals.length, 1);
   assert.equal(uow.data.proposals[0]?.status, 'pending');
 });
+
+test('normalizes duplicate impacts and drops unsupported API/page impacts', async () => {
+  const uow = new MemoryUow();
+  const { project, ticket } = await seed(uow);
+  const runAgent: RunAgentFn = async () => ({
+    kind: 'extraction',
+    requirements: [
+      {
+        title: 'Trial conversion',
+        impacts: [
+          { kind: 'service', value: 'downstream billing' },
+          { kind: 'service', value: 'Downstream Billing' },
+          { kind: 'api', value: 'POST /subscriptions' },
+          { kind: 'api', value: 'POST /subscriptions' },
+          { kind: 'page', value: '/checkout' },
+          { kind: 'page', value: 'confirmation page' },
+        ],
+      },
+    ],
+  });
+  const result = await runExtraction(
+    uow,
+    { runAgent },
+    {
+      ...baseInput(project.id, ticket.id),
+      content: 'The checkout flow sends POST /subscriptions and shows the confirmation page.',
+    },
+  );
+  const versions = await uow.proposals.listVersions(result.proposal.id);
+  const output = JSON.parse(versions[0]?.modelOutput ?? '{}') as {
+    requirements?: Array<{ impacts?: Array<{ kind: string; value: string }> }>;
+  };
+  assert.deepEqual(output.requirements?.[0]?.impacts, [
+    { kind: 'service', value: 'downstream billing' },
+    { kind: 'api', value: 'POST /subscriptions' },
+    { kind: 'page', value: 'confirmation page' },
+  ]);
+});

@@ -1,0 +1,4 @@
+{"file":".trellis/spec/backend/error-handling.md","reason":"Review bounded timeout behavior, provider error preservation, and safe client-facing messages."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Review focused tests and cross-package implementation quality."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Check the complete failure flow across API, Redis, BullMQ, worker, agent, gateway, and dashboard."}
+{"file":".trellis/tasks/09-20-worker-agentic-502/design.md","reason":"Verify implementation remains within the diagnosed boundaries and preserves async semantics."}

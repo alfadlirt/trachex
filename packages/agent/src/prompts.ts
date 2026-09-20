@@ -8,6 +8,8 @@ export function buildExtractionPrompt(input: { sourceType: string; attribution?:
     'When context is insufficient, state uncertainty in the description rather than inventing technical details.',
     'Do not claim Git or repository verification, mark work complete, or silently mutate canonical requirements.',
     'Only extract what the source actually states. Do not invent requirements.',
+    'Only include api or page impacts when the exact API path or page name appears in the source. Do not infer repository endpoints or pages from business behavior.',
+    'List each impact value at most once per kind.',
     `Source type: ${input.sourceType}${input.attribution ? ` (attribution: ${input.attribution})` : ''}`,
   ].join('\n');
 }
@@ -29,6 +31,8 @@ export function buildReconciliationPrompt(input: {
     'If the source does not identify the changed meaning/behavior/constraint/acceptance rule or the target is uncertain, leave `supersedes` empty.',
     'Return a proposal for human review; do not imply that anything has been applied.',
     'Only reflect what the note actually states.',
+    'Only include api or page impacts when the exact API path or page name appears in the source. Do not infer repository endpoints or pages from business behavior.',
+    'List each impact value at most once per kind.',
     `Source type: ${input.sourceType}${input.attribution ? ` (attribution: ${input.attribution})` : ''}`,
   ].join('\n');
 }

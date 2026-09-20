@@ -2,6 +2,7 @@ import { type Job, Queue, Worker } from 'bullmq';
 import { Redis } from 'ioredis';
 
 export const ADJUSTMENT_QUEUE = 'trachex-adjustments';
+const REDIS_TIMEOUT_MS = 10_000;
 export interface AdjustmentPayload {
   adjustmentJobId: string;
 }
@@ -10,13 +11,26 @@ export function createAdjustmentQueue(redisUrl: string): {
   queue: Queue<AdjustmentPayload>;
   close: () => Promise<void>;
 } {
-  const connection = new Redis(redisUrl, { maxRetriesPerRequest: null });
+  const connection = new Redis(redisUrl, {
+    commandTimeout: REDIS_TIMEOUT_MS,
+    connectTimeout: REDIS_TIMEOUT_MS,
+    // Do not leave Queue.add waiting in ioredis's offline command queue while
+    // Redis is unreachable. The API must be able to mark the job failed.
+    enableOfflineQueue: false,
+    maxRetriesPerRequest: 1,
+  });
   const queue = new Queue<AdjustmentPayload>(ADJUSTMENT_QUEUE, { connection });
   return {
     queue,
     close: async () => {
       await queue.close();
-      await connection.quit();
+      try {
+        await connection.quit();
+      } catch {
+        // A failed connection cannot accept QUIT. Disconnect it so callers do
+        // not retain ioredis reconnect timers after a bounded enqueue failure.
+        connection.disconnect();
+      }
     },
   };
 }
@@ -26,16 +40,21 @@ export async function enqueueAdjustment(
   adjustmentJobId: string,
 ): Promise<{ queueJobId: string; close: () => Promise<void> }> {
   const owned = createAdjustmentQueue(redisUrl);
-  const queued = await owned.queue.add(
-    'reconcile-adjustment',
-    { adjustmentJobId },
-    {
-      attempts: 3,
-      backoff: { type: 'exponential', delay: 1000 },
-      removeOnComplete: true,
-    },
-  );
-  return { queueJobId: queued.id ?? adjustmentJobId, close: owned.close };
+  try {
+    const queued = await owned.queue.add(
+      'reconcile-adjustment',
+      { adjustmentJobId },
+      {
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 1000 },
+        removeOnComplete: true,
+      },
+    );
+    return { queueJobId: queued.id ?? adjustmentJobId, close: owned.close };
+  } catch (error) {
+    await owned.close().catch(() => undefined);
+    throw error;
+  }
 }
 
 export function createAdjustmentWorker(

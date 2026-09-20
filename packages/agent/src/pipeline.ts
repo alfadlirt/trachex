@@ -70,7 +70,7 @@ export async function runExtraction(uow: UnitOfWork, deps: PipelineDeps, input: 
       ticketId: input.ticketId,
       kind: 'extraction',
       sourceId: source.source.id,
-      output: normalizeOutput(output),
+      output: normalizeOutput(output, input.content),
     });
     return { source: source.source, proposal };
   } catch (error) {
@@ -115,7 +115,7 @@ export async function runReconciliation(uow: UnitOfWork, deps: PipelineDeps, inp
       ticketId: input.ticketId,
       kind: 'reconciliation',
       sourceId: source.source.id,
-      output: normalizeOutput(output),
+      output: normalizeOutput(output, input.content),
     });
     return { source: source.source, proposal };
   } catch (error) {
@@ -126,7 +126,7 @@ export async function runReconciliation(uow: UnitOfWork, deps: PipelineDeps, inp
   }
 }
 
-function normalizeOutput(output: unknown): DomainProposalOutput {
+function normalizeOutput(output: unknown, sourceContent: string): DomainProposalOutput {
   const raw = JSON.parse(JSON.stringify(output)) as {
     kind: string;
     requirements?: Array<Record<string, unknown>>;
@@ -146,7 +146,7 @@ function normalizeOutput(output: unknown): DomainProposalOutput {
     ]) {
       const value = draft[key];
       if (value !== null && value !== undefined) {
-        clean[key] = value;
+        clean[key] = key === 'impacts' ? normalizeImpacts(value, sourceContent) : value;
       }
     }
     return clean;
@@ -164,6 +164,35 @@ function normalizeOutput(output: unknown): DomainProposalOutput {
     } as unknown as DomainProposalOutput;
   }
   return raw as unknown as DomainProposalOutput;
+}
+
+function normalizeImpacts(value: unknown, sourceContent: string) {
+  if (!Array.isArray(value)) return value;
+  const source = sourceContent.toLocaleLowerCase();
+  const seen = new Set<string>();
+  return value.filter((impact): impact is { kind: string; value: string } => {
+    if (
+      !impact ||
+      typeof impact !== 'object' ||
+      typeof impact.kind !== 'string' ||
+      typeof impact.value !== 'string'
+    ) {
+      return false;
+    }
+    const kind = impact.kind.toLocaleLowerCase();
+    const normalizedValue = impact.value.trim();
+    if (!normalizedValue) return false;
+    if (
+      (kind === 'api' || kind === 'page') &&
+      !source.includes(normalizedValue.toLocaleLowerCase())
+    ) {
+      return false;
+    }
+    const key = `${kind}\u0000${normalizedValue.toLocaleLowerCase()}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function logProviderError(phase: string, error: unknown) {

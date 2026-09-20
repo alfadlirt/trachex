@@ -11,9 +11,11 @@ export interface ChecklistFixture {
       description?: string;
       implementationItems?: string[];
       successCriteria?: string[];
+      impacts?: Array<{ kind: 'service' | 'api' | 'page'; value: string }>;
     }>;
   };
   expected: 'pass' | 'fail';
+  impactExpected?: 'pass' | 'fail';
   requiresUncertainty?: boolean;
 }
 
@@ -89,6 +91,50 @@ export const CHECKLIST_FIXTURES: ChecklistFixture[] = [
     },
     expected: 'pass',
     requiresUncertainty: true,
+  },
+  {
+    id: 'impact-grounding-and-deduplication',
+    source:
+      'The checkout flow sends POST /subscriptions and updates the downstream billing service. Customers see the confirmation page after a successful trial conversion.',
+    concepts: ['checkout', 'subscriptions', 'downstream billing', 'trial conversion'],
+    output: {
+      kind: 'extraction',
+      requirements: [
+        {
+          title: 'Trial conversion updates billing',
+          implementationItems: ['Schedule trial conversion and update billing state.'],
+          successCriteria: ['A converted trial is reflected in downstream billing.'],
+          impacts: [
+            { kind: 'service', value: 'downstream billing' },
+            { kind: 'api', value: 'POST /subscriptions' },
+            { kind: 'page', value: 'confirmation page' },
+          ],
+        },
+      ],
+    },
+    expected: 'pass',
+  },
+  {
+    id: 'impact-inference-and-duplicates',
+    source: 'Customers can pause an active subscription.',
+    concepts: ['pause', 'active subscription'],
+    output: {
+      kind: 'extraction',
+      requirements: [
+        {
+          title: 'Pause subscriptions',
+          implementationItems: ['Pause an active subscription.'],
+          successCriteria: ['The subscription is shown as paused.'],
+          impacts: [
+            { kind: 'api', value: 'POST /subscriptions' },
+            { kind: 'api', value: 'post /subscriptions' },
+            { kind: 'page', value: '/checkout' },
+          ],
+        },
+      ],
+    },
+    expected: 'pass',
+    impactExpected: 'fail',
   },
 ];
 

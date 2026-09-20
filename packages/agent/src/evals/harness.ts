@@ -112,6 +112,42 @@ function faithfulness(fixture: ChecklistFixture): EvalScore {
   );
 }
 
+function impactGrounding(fixture: ChecklistFixture): EvalScore {
+  const source = fixture.source.toLocaleLowerCase();
+  const impacts = drafts(fixture).flatMap((draft) => draft.impacts ?? []);
+  if (impacts.length === 0) {
+    return score(
+      'Faithfulness',
+      'impact-grounding-and-deduplication',
+      true,
+      1,
+      'No impact claims supplied by the fixture.',
+      fixture,
+    );
+  }
+  const seen = new Set<string>();
+  const violations = impacts.filter((impact) => {
+    const value = impact.value.trim();
+    const key = `${impact.kind}\u0000${value.toLocaleLowerCase()}`;
+    const duplicate = seen.has(key);
+    seen.add(key);
+    const inferred =
+      (impact.kind === 'api' || impact.kind === 'page') &&
+      !source.includes(value.toLocaleLowerCase());
+    return duplicate || inferred;
+  });
+  const expected = fixture.impactExpected ?? 'pass';
+  const passed = expected === 'fail' ? violations.length > 0 : violations.length === 0;
+  return score(
+    'Faithfulness',
+    'impact-grounding-and-deduplication',
+    passed,
+    passed ? 1 : 0,
+    `impact violations=${violations.length}, total impacts=${impacts.length}`,
+    fixture,
+  );
+}
+
 function geval(fixture: ChecklistFixture): EvalScore {
   const draft = drafts(fixture)[0];
   const actionable = (draft?.implementationItems?.length ?? 0) >= 2;
@@ -168,13 +204,13 @@ function promptAlignment(fixture: ChecklistFixture): EvalScore {
     'Do not guess frameworks',
     'uncertainty',
     'successCriteria',
+    'exact API path or page name appears in the source',
   ];
   const present = guardrails.filter((rule) => prompt.includes(rule));
   const outputViolates = forbiddenAssumptions.test(JSON.stringify(fixture.output));
   const passed =
-    fixture.expected === 'fail'
-      ? present.length === guardrails.length && outputViolates
-      : present.length === guardrails.length && !outputViolates;
+    present.length === guardrails.length &&
+    (fixture.expected === 'fail' ? outputViolates : !outputViolates);
   return score(
     'Prompt alignment',
     'guardrails',
@@ -297,6 +333,7 @@ export async function runEvalHarness(): Promise<EvalReport> {
     contains(fixture),
     relevancy(fixture),
     faithfulness(fixture),
+    impactGrounding(fixture),
     geval(fixture),
     promptAlignment(fixture),
   ]);

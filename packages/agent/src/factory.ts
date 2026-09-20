@@ -62,7 +62,12 @@ export async function runAgentWithSchema(
   agent: Agent<unknown>,
   input: { prompt: string },
 ): Promise<unknown> {
-  const outcome = await agent.generate({ prompt: input.prompt });
+  // Use the same streaming provider path as the verified gateway integration.
+  const stream = agent.stream({ prompt: input.prompt });
+  for await (const _event of stream) {
+    // Drain the stream so tool calls and the final structured response execute.
+  }
+  const outcome = await stream.result;
   if (outcome.type !== 'response') {
     throw new Error(`agent did not produce a response: ${outcome.type}`);
   }
