@@ -1,4 +1,5 @@
 import { runEvalHarness } from './harness.ts';
+import { reportToLens } from './lens.ts';
 
 export async function runEvalCli(): Promise<number> {
   const report = await runEvalHarness();
@@ -11,5 +12,6 @@ export async function runEvalCli(): Promise<number> {
   console.log(
     `\n${report.scores.filter((s) => s.passed).length}/${report.scores.length} metrics passed`,
   );
+  await reportToLens(report);
   return report.passed ? 0 : 1;
 }
