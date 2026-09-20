@@ -79,14 +79,25 @@ export function createChatRoutes(deps: ChatDeps): Hono {
       return c.json(errorPayload(new NotFoundError('ticket', c.req.param('ticketKey'))), 404);
     const body = (await c.req.json().catch(() => ({}))) as { message?: string };
     const message = body.message?.trim() ?? '';
-    const sessionId = (body as { sessionId?: string }).sessionId;
+    const requestedSessionId = (body as { sessionId?: string }).sessionId;
     c.header('Content-Type', 'application/x-ndjson');
     const stream = new ReadableStream({
       async start(controller) {
         const emit = (event: Record<string, unknown>) =>
           controller.enqueue(new TextEncoder().encode(`${JSON.stringify(event)}\n`));
         try {
-          emit({ type: 'start', ticketKey: ticket.key });
+          const requested = requestedSessionId
+            ? await ctx.uow.sessions.findById(requestedSessionId)
+            : null;
+          if (requestedSessionId && (!requested || requested.ticketId !== ticket.id)) {
+            throw new Error(
+              'That chat session is unavailable. Start a new conversation and ask again.',
+            );
+          }
+          // The composer is usable before any session exists. The first message
+          // lazily creates the session so users never have to click "New Chat".
+          const session = requested ?? (await createSession(project.id, ticket.id));
+          emit({ type: 'start', ticketKey: ticket.key, sessionId: session.id });
           if (!message) {
             emit({ type: 'done' });
             controller.close();
@@ -96,10 +107,6 @@ export function createChatRoutes(deps: ChatDeps): Hono {
             projectId: project.id,
             ticketKey: ticket.key,
           });
-          const session = sessionId ? await ctx.uow.sessions.findById(sessionId) : null;
-          if (!session || session.ticketId !== ticket.id) {
-            throw new Error('A valid chat session is required. Start a new chat first.');
-          }
           const history = await ctx.uow.sessions.listMessages(session.id);
           const output = await runAgent({
             instructions: [

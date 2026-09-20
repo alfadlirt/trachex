@@ -2,17 +2,23 @@ import type { RunAgentFn } from '@trachex/agent';
 import type { ProposalOutput } from '@trachex/domain';
 import {
   approveProposal,
+  buildChecklistView,
   buildExportSummary,
   buildProposalReviews,
   checkRequirement,
   createProject,
   createTicket,
+  deleteProject,
+  deleteSubjectByTicket,
   editProposal,
   NotFoundError,
   rejectProposal,
+  reorderChecklist,
   resetProposal,
   serializeJson,
   serializeMarkdown,
+  updateProject,
+  updateTicket,
 } from '@trachex/domain';
 import { Hono } from 'hono';
 import type { ApiContext } from './context.ts';
@@ -23,7 +29,12 @@ import {
   checkSchema,
   createProjectSchema,
   createTicketSchema,
+  deleteProjectSchema,
+  deleteTicketSchema,
   proposalEditSchema,
+  reorderChecklistSchema,
+  updateProjectSchema,
+  updateTicketSchema,
 } from './validation.ts';
 
 export interface RouteDeps {
@@ -53,6 +64,38 @@ export function createRoutes(deps: RouteDeps): Hono {
         ...(body.description !== undefined ? { description: body.description } : {}),
       });
       return c.json({ project: result }, 201);
+    } catch (error) {
+      return c.json(errorPayload(error), statusForError(error));
+    }
+  });
+
+  app.patch('/projects/:projectId', async (c) => {
+    try {
+      const project = await ctx.uow.projects.findById(c.req.param('projectId'));
+      if (!project) {
+        return c.json(errorPayload(new NotFoundError('project', c.req.param('projectId'))), 404);
+      }
+      const body = updateProjectSchema.parse(await c.req.json());
+      const updated = await updateProject(ctx.uow, {
+        projectId: project.id,
+        ...(body.name !== undefined ? { name: body.name } : {}),
+        ...(body.slug !== undefined ? { slug: body.slug } : {}),
+      });
+      return c.json({ project: updated });
+    } catch (error) {
+      return c.json(errorPayload(error), statusForError(error));
+    }
+  });
+
+  app.delete('/projects/:projectId', async (c) => {
+    try {
+      const project = await ctx.uow.projects.findById(c.req.param('projectId'));
+      if (!project) {
+        return c.json(errorPayload(new NotFoundError('project', c.req.param('projectId'))), 404);
+      }
+      const body = deleteProjectSchema.parse(await c.req.json().catch(() => ({})));
+      await deleteProject(ctx.uow, { projectId: project.id, confirmName: body.confirmName });
+      return c.json({ projectId: project.id, status: 'deleted' });
     } catch (error) {
       return c.json(errorPayload(error), statusForError(error));
     }
@@ -105,6 +148,16 @@ export function createRoutes(deps: RouteDeps): Hono {
       projectId: project.id,
       ticketKey: ticket.key,
     });
+    const checklistView = await buildChecklistView(ctx.uow, {
+      projectId: project.id,
+      ticketKey: ticket.key,
+    });
+    const adjustmentJobs = (await ctx.uow.adjustmentJobs?.listByTicket(ticket.id)) ?? [];
+    const jobSources = new Map(sources.map((item) => [item.id, item]));
+    const adjustmentJobDetails = adjustmentJobs.map((job) => ({
+      job,
+      source: jobSources.get(job.sourceId) ?? null,
+    }));
     return c.json({
       project,
       ticket,
@@ -115,8 +168,60 @@ export function createRoutes(deps: RouteDeps): Hono {
       impacts,
       scenarios,
       timeline: summary.timeline,
-      adjustmentJobs: (await ctx.uow.adjustmentJobs?.listByTicket(ticket.id)) ?? [],
+      superseded: checklistView.superseded,
+      adjustmentJobs,
+      adjustmentJobDetails,
     });
+  });
+
+  app.patch('/projects/:projectId/tickets/:ticketKey', async (c) => {
+    try {
+      const ticket = await findTicket(ctx, c.req.param('projectId'), c.req.param('ticketKey'));
+      if (!ticket) {
+        return c.json(errorPayload(new NotFoundError('ticket', c.req.param('ticketKey'))), 404);
+      }
+      const body = updateTicketSchema.parse(await c.req.json());
+      const updated = await updateTicket(ctx.uow, {
+        ticketId: ticket.id,
+        ...(body.title !== undefined ? { title: body.title } : {}),
+        ...(body.key !== undefined ? { key: body.key } : {}),
+      });
+      return c.json({ ticket: updated });
+    } catch (error) {
+      return c.json(errorPayload(error), statusForError(error));
+    }
+  });
+
+  app.delete('/projects/:projectId/tickets/:ticketKey', async (c) => {
+    try {
+      const ticket = await findTicket(ctx, c.req.param('projectId'), c.req.param('ticketKey'));
+      if (!ticket) {
+        return c.json(errorPayload(new NotFoundError('ticket', c.req.param('ticketKey'))), 404);
+      }
+      const body = deleteTicketSchema.parse(await c.req.json().catch(() => ({})));
+      await deleteSubjectByTicket(ctx.uow, {
+        ticketId: ticket.id,
+        confirmName: body.confirmName,
+      });
+      return c.json({ ticketId: ticket.id, status: 'deleted' });
+    } catch (error) {
+      return c.json(errorPayload(error), statusForError(error));
+    }
+  });
+
+  app.post('/projects/:projectId/tickets/:ticketKey/checklist/reorder', async (c) => {
+    try {
+      const ticket = await findTicket(ctx, c.req.param('projectId'), c.req.param('ticketKey'));
+      if (!ticket) {
+        return c.json(errorPayload(new NotFoundError('ticket', c.req.param('ticketKey'))), 404);
+      }
+      const body = reorderChecklistSchema.parse(await c.req.json());
+      await reorderChecklist(ctx.uow, { ticketId: ticket.id, orderedIds: body.orderedIds });
+      const checklist = await ctx.uow.requirements.listActiveByTicket(ticket.id);
+      return c.json({ ticketId: ticket.id, checklist });
+    } catch (error) {
+      return c.json(errorPayload(error), statusForError(error));
+    }
   });
 
   app.post('/projects/:projectId/tickets/:ticketKey/adjustments', async (c) => {
@@ -208,6 +313,8 @@ export function createRoutes(deps: RouteDeps): Hono {
         attempts: 0,
         error: null,
         proposalId: null,
+        fileName: body.file ? body.file.name : null,
+        fileKind: body.file ? body.file.type || null : null,
       });
       if (!enqueue) throw new Error('Adjustment queue is not configured. Set TRACHEX_REDIS_URL.');
       let queueJobId: string;
