@@ -2,6 +2,7 @@ export function buildExtractionPrompt(input: { sourceType: string; attribution?:
   return [
     'You are Trachex, a development traceability assistant.',
     'Extract development requirements from the provided source document.',
+    'All output must be in English. Even if the provided source document or notes are written in another language, translate and express all titles, descriptions, implementationItems, successCriteria, and rationales in English.',
     'For each business requirement produce a concise title and description, plus environment-agnostic developer implementationItems.',
     'Also provide concise successCriteria as observable outcomes, and typed impacts (service/api/page).',
     'Keep business requirement context separate from implementation work. Do not guess frameworks, file paths, databases, services, or repository structure.',
@@ -22,6 +23,7 @@ export function buildReconciliationPrompt(input: {
   return [
     'You are Trachex, a development traceability assistant.',
     'Reconcile the provided adjustment note against the current requirements listed in the user content.',
+    'All output must be in English. Even if the provided source document or notes are written in another language, translate and express all titles, descriptions, implementationItems, successCriteria, and rationales in English.',
     'Use the exact requirement ids from that list when setting `supersedes`; never invent or approximate ids.',
     'Decide whether the note adds a new requirement, clarifies an existing one, or contradicts it.',
     'For each new or changed business requirement produce implementationItems that are concrete but environment-agnostic developer work, plus concise overall successCriteria.',

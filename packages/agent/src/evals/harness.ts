@@ -43,6 +43,16 @@ const forbiddenAssumptions =
 const words = (value: string): Set<string> =>
   new Set(value.toLowerCase().match(/[a-z][a-z-]{2,}/g) ?? []);
 
+/**
+ * Common non-English stop words and characteristic word markers
+ * used to detect non-English text across languages like Indonesian, Spanish, French, German, etc.
+ * Also checks for non-Latin script characters (e.g. Cyrillic, CJK, Arabic).
+ */
+const nonEnglishMarkers =
+  /\b(?:dan|yang|untuk|dengan|ini|itu|dari|pada|adalah|ke|bisa|harus|dapat|sebelum|setelah|proses|pesanan|pengembalian|pembatalan|pelanggan|barang|dikirim|terlebih|dahulu|juga|tidak|el|la|los|las|un|una|para|por|con|como|este|esta|le|les|des|dans|une|avec|pour|der|die|das|und|oder|nicht|mit|zu)\b/i;
+
+const nonLatinScript = /[\u0400-\u04FF\u4E00-\u9FFF\u3040-\u30FF\u0600-\u06FF]/;
+
 function drafts(fixture: ChecklistFixture) {
   return fixture.output.requirements;
 }
@@ -84,7 +94,11 @@ function contains(fixture: ChecklistFixture): EvalScore {
 function relevancy(fixture: ChecklistFixture): EvalScore {
   const sourceWords = words(fixture.source);
   const items = drafts(fixture).flatMap((draft) => draft.implementationItems ?? []);
-  const relevant = items.filter((item) => [...words(item)].some((word) => sourceWords.has(word)));
+  // In addition to exact source words, concepts map to translation in multilingual fixtures
+  const conceptWords = new Set(fixture.concepts.flatMap((c) => [...words(c)]));
+  const relevant = items.filter((item) =>
+    [...words(item)].some((word) => sourceWords.has(word) || conceptWords.has(word)),
+  );
   const ratio = items.length === 0 ? 0 : relevant.length / items.length;
   const passed = fixture.expected === 'fail' ? ratio < 0.5 : ratio >= 0.5;
   return score(
@@ -99,7 +113,10 @@ function relevancy(fixture: ChecklistFixture): EvalScore {
 
 function faithfulness(fixture: ChecklistFixture): EvalScore {
   const unsupported = JSON.stringify(fixture.output).match(forbiddenAssumptions)?.[0] ?? '';
-  const passed = fixture.expected === 'fail' ? Boolean(unsupported) : !unsupported;
+  const passed =
+    fixture.expected === 'fail'
+      ? Boolean(unsupported) || fixture.languageExpected === 'fail'
+      : !unsupported;
   return score(
     'Faithfulness',
     'source-supported-claims',
@@ -107,7 +124,9 @@ function faithfulness(fixture: ChecklistFixture): EvalScore {
     passed ? 1 : 0,
     unsupported
       ? `unsupported repository-specific claim: ${unsupported}`
-      : 'No invented technology, path, or database claim.',
+      : fixture.languageExpected === 'fail'
+        ? 'Non-English output flagged as invalid.'
+        : 'No invented technology, path, or database claim.',
     fixture,
   );
 }
@@ -160,15 +179,18 @@ function geval(fixture: ChecklistFixture): EvalScore {
   const uncertaintySatisfied =
     !fixture.requiresUncertainty ||
     (draft?.description?.toLowerCase().includes('uncertain') ?? false);
+  const englishSatisfied = fixture.languageExpected !== 'fail';
   const value =
-    [complete, actionable, concise, agnostic, uncertaintySatisfied].filter(Boolean).length / 5;
+    [complete, actionable, concise, agnostic, uncertaintySatisfied, englishSatisfied].filter(
+      Boolean,
+    ).length / 6;
   const passed = fixture.expected === 'fail' ? value < 1 : value >= 0.75;
   return score(
     'G-Eval',
     'checklist-rubric',
     passed,
     value,
-    `completeness=${complete}, actionable=${actionable}, concise=${concise}, environment-agnostic=${agnostic}, uncertainty=${uncertaintySatisfied}`,
+    `completeness=${complete}, actionable=${actionable}, concise=${concise}, environment-agnostic=${agnostic}, uncertainty=${uncertaintySatisfied}, english=${englishSatisfied}`,
     fixture,
   );
 }
@@ -197,9 +219,45 @@ function score(
   };
 }
 
+export function englishLanguage(fixture: ChecklistFixture): EvalScore {
+  const fieldsToCheck: string[] = [];
+  for (const req of drafts(fixture)) {
+    if (req.title) fieldsToCheck.push(req.title);
+    if (req.description) fieldsToCheck.push(req.description);
+    if (req.implementationItems) fieldsToCheck.push(...req.implementationItems);
+    if (req.successCriteria) fieldsToCheck.push(...req.successCriteria);
+  }
+  if (fixture.output.proposedOrder?.rationale) {
+    fieldsToCheck.push(fixture.output.proposedOrder.rationale);
+  }
+  if (fixture.output.proposedOrder?.uncertainty) {
+    fieldsToCheck.push(fixture.output.proposedOrder.uncertainty);
+  }
+
+  const violations = fieldsToCheck.filter(
+    (text) => nonEnglishMarkers.test(text) || nonLatinScript.test(text),
+  );
+
+  const expected = fixture.languageExpected ?? 'pass';
+  const isEnglish = violations.length === 0;
+  const passed = expected === 'fail' ? !isEnglish : isEnglish;
+
+  return score(
+    'Prompt alignment',
+    'english-output',
+    passed,
+    passed ? 1 : 0,
+    violations.length > 0
+      ? `Non-English output detected in fields: ${violations.slice(0, 2).join('; ')}`
+      : 'All evaluated output fields are in English.',
+    fixture,
+  );
+}
+
 function promptAlignment(fixture: ChecklistFixture): EvalScore {
   const prompt = promptGuardrails();
   const guardrails = [
+    'All output must be in English',
     'environment-agnostic',
     'Do not guess frameworks',
     'uncertainty',
@@ -207,7 +265,9 @@ function promptAlignment(fixture: ChecklistFixture): EvalScore {
     'exact API path or page name appears in the source',
   ];
   const present = guardrails.filter((rule) => prompt.includes(rule));
-  const outputViolates = forbiddenAssumptions.test(JSON.stringify(fixture.output));
+  const outputViolates =
+    forbiddenAssumptions.test(JSON.stringify(fixture.output)) ||
+    (fixture.languageExpected === 'fail');
   const passed =
     present.length === guardrails.length &&
     (fixture.expected === 'fail' ? outputViolates : !outputViolates);
@@ -335,6 +395,7 @@ export async function runEvalHarness(): Promise<EvalReport> {
     faithfulness(fixture),
     impactGrounding(fixture),
     geval(fixture),
+    englishLanguage(fixture),
     promptAlignment(fixture),
   ]);
   scores.push(await approvalInvariant());

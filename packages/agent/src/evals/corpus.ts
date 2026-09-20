@@ -13,9 +13,15 @@ export interface ChecklistFixture {
       successCriteria?: string[];
       impacts?: Array<{ kind: 'service' | 'api' | 'page'; value: string }>;
     }>;
+    proposedOrder?: {
+      orderedIds: string[];
+      rationale: string;
+      uncertainty?: string | null;
+    } | null;
   };
   expected: 'pass' | 'fail';
   impactExpected?: 'pass' | 'fail';
+  languageExpected?: 'pass' | 'fail';
   requiresUncertainty?: boolean;
 }
 
@@ -135,6 +141,62 @@ export const CHECKLIST_FIXTURES: ChecklistFixture[] = [
     },
     expected: 'pass',
     impactExpected: 'fail',
+  },
+  {
+    id: 'multilingual-source-english-output',
+    source:
+      'Pelanggan dapat membatalkan pesanan sebelum barang dikirim. Pengembalian dana harus diproses secara otomatis ke metode pembayaran awal.',
+    concepts: ['cancel', 'order', 'refund', 'payment'],
+    output: {
+      kind: 'extraction',
+      requirements: [
+        {
+          title: 'Customers can cancel orders before shipment',
+          description:
+            'Allow customers to cancel an order prior to dispatch and trigger an automatic refund to the original payment method.',
+          implementationItems: [
+            'Validate order cancellation eligibility based on shipment status.',
+            'Trigger automatic refund processing to the original payment method.',
+            'Notify the customer about the cancellation and refund outcome.',
+          ],
+          successCriteria: [
+            'Orders cannot be canceled once shipment has begun.',
+            'Eligible cancellations automatically issue a refund to the original payment method.',
+          ],
+        },
+      ],
+      proposedOrder: {
+        orderedIds: ['req-order-cancel'],
+        rationale: 'Order cancellation validation must be implemented before refund triggering.',
+      },
+    },
+    expected: 'pass',
+  },
+  {
+    id: 'multilingual-source-non-english-output',
+    source:
+      'Pelanggan dapat membatalkan pesanan sebelum barang dikirim. Pengembalian dana harus diproses secara otomatis.',
+    concepts: ['cancel', 'order', 'refund'],
+    output: {
+      kind: 'extraction',
+      requirements: [
+        {
+          title: 'Pelanggan dapat membatalkan pesanan',
+          description: 'Pengembalian dana harus diproses secara otomatis.',
+          implementationItems: [
+            'Tambahkan integrasi sistem eksternal tanpa relasi.',
+            'Lakukan konfigurasi server manual.',
+          ],
+          successCriteria: ['Pesanan berhasil dibatalkan dan dana dikembalikan.'],
+        },
+      ],
+      proposedOrder: {
+        orderedIds: ['req-batal-pesanan'],
+        rationale: 'Validasi pembatalan harus diselesaikan terlebih dahulu.',
+      },
+    },
+    expected: 'fail',
+    languageExpected: 'fail',
   },
 ];
 

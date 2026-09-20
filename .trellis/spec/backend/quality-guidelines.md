@@ -53,8 +53,10 @@ Biome 2 at repo root, `tsx` for running TS in tests/dev. Node engine floor is
 - Eval harness (`packages/agent/src/evals/`): fixture-based (no real LLM),
   deterministic in CI. `pnpm eval` runs the harness + the real-ticket
   acceptance test (`packages/cli/src/evals/acceptance.ts`) and exits non-zero
-  on failure. Release gate: one real ticket completes the full flow; all
-  adjustments have source + timestamps; direct conflicts require approval;
+  on failure. All prompt templates enforce English-only output regardless of
+  input resource language (`All output must be in English`), validated by the
+  `english-output` eval metric. Release gate: one real ticket completes the full
+  flow; all adjustments have source + timestamps; direct conflicts require approval;
   human completion is never inferred; export includes timeline, checklist,
   impacts, scenarios, history.
 
