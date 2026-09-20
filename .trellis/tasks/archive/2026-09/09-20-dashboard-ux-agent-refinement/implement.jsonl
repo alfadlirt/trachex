@@ -1,0 +1,2 @@
+{"file":".trellis/spec/frontend/directory-structure.md","reason":"Dashboard route organization, API boundary, accessibility, chat stream, and active-only checklist response contracts."}
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"SQLite repository, migration, ordering, provenance, and deletion constraints."}

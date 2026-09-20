@@ -1,0 +1,2 @@
+{"file":".trellis/spec/frontend/directory-structure.md","reason":"Quality review must verify dashboard state handling, keyboard behavior, chat stream merging, and active-only checklist semantics."}
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"Quality review must verify canonical SQLite storage, migrations, repository ordering, provenance, and safe lifecycle mutations."}
