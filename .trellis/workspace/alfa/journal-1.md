@@ -124,3 +124,25 @@ Added explicit English-only output system instructions to extraction and reconci
 ### Status
 
 [OK] **Completed**
+
+
+## Session 6: HTTPS MCP transport implementation
+<!-- trellis-session: v=2 fp=e1bd6842652248ca -->
+
+**Date**: 2026-09-20
+**Task**: HTTPS MCP transport implementation
+**Branch**: `main`
+
+### Summary
+
+Implemented dual-transport MCP: kept stdio default and added Streamable HTTP at /mcp with bearer auth, host/origin validation, per-session transports, CLI --transport http flag, Dokploy deployment docs, and protocol tests.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `10136ac` | feat(mcp): support streamable http transport for remote agents |
+
+### Status
+
+[OK] **Completed**
