@@ -1,0 +1,3 @@
+{"file":".trellis/spec/frontend/index.md","reason":"Frontend verification scope for the dashboard UI."}
+{"file":".trellis/spec/frontend/directory-structure.md","reason":"Responsive, keyboard, and display-projection conventions to verify."}
+{"file":".trellis/spec/guides/index.md","reason":"Shared review checklist for reuse and derived display state."}

@@ -110,6 +110,13 @@ to deduplicate by `(kind, value.trim())`, trim the displayed value, and leave
 the source array unchanged. Checklist rows must continue filtering the raw
 impact array by `requirementId` so each requirement retains its own context.
 
+Pending supersession proposals and superseded history use labelled old-to-new
+relationship blocks instead of comma-separated text. Status is always written
+as text and may use color as reinforcement. Historical completion wording is
+derived from the final `devStatus` and chronologically ordered audit actions;
+invalid or inconsistent records display an unavailable state instead of an
+inference.
+
 ---
 
 ## Landing Pages (`/`)

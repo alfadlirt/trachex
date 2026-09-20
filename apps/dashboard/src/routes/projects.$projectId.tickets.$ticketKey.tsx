@@ -1,6 +1,7 @@
 import { createRoute, Link, useParams } from '@tanstack/react-router';
 import {
   ArrowDown,
+  ArrowRight,
   ArrowUp,
   CheckCircle2,
   Circle,
@@ -27,6 +28,7 @@ import {
 } from '../lib/api.ts';
 import { mergeEvidence, normalizeChatContent } from '../lib/chat-format.ts';
 import { uniqueTicketImpacts } from '../lib/impacts.ts';
+import { getSupersededCompletionState } from '../lib/superseded.ts';
 import { cn } from '../lib/utils.ts';
 import { rootRoute } from './__root.tsx';
 
@@ -874,11 +876,21 @@ function AdjustmentQueue({
 }
 
 function SupersededSection({ entries }: { entries: SupersededEntry[] }) {
+  const [open, setOpen] = useState(entries.length > 0);
+
+  useEffect(() => {
+    if (entries.length > 0) setOpen(true);
+  }, [entries.length]);
+
   return (
-    <details className="group mt-6 rounded-xl border border-zinc-200 bg-white" open={false}>
-      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-4 py-3 text-sm font-semibold text-zinc-900 [&::-webkit-details-marker]:hidden">
+    <details
+      className="group mt-6 rounded-xl border border-zinc-200 bg-white"
+      open={open}
+      onToggle={(event) => setOpen(event.currentTarget.open)}
+    >
+      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-4 py-3 text-sm font-semibold text-zinc-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 [&::-webkit-details-marker]:hidden">
         <span>
-          Superseded{' '}
+          Superseded history{' '}
           <span className="ml-1 rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600">
             {entries.length}
           </span>
@@ -888,6 +900,9 @@ function SupersededSection({ entries }: { entries: SupersededEntry[] }) {
         </span>
       </summary>
       <div className="border-t border-zinc-200 px-4 py-4">
+        <p className="mb-4 text-sm text-zinc-600">
+          Review retired requirements, their completion state, and any linked replacement.
+        </p>
         {entries.length === 0 ? (
           <p className="text-sm text-zinc-500">
             Nothing has been superseded yet. Replaced requirements stay here as evidence.
@@ -895,56 +910,85 @@ function SupersededSection({ entries }: { entries: SupersededEntry[] }) {
         ) : (
           <ul className="space-y-4">
             {entries.map((entry) => (
-              <li key={entry.item.id} className="rounded-lg bg-zinc-50 p-4 text-sm">
-                <p className="font-medium text-zinc-900">{entry.item.title}</p>
-                {entry.item.description && (
-                  <p className="mt-1 text-zinc-600">{entry.item.description}</p>
-                )}
-                <dl className="mt-3 space-y-1.5 text-xs text-zinc-600">
-                  <div className="flex flex-wrap gap-x-2">
-                    <dt className="font-medium text-zinc-800">Superseded by:</dt>
-                    <dd>{entry.supersededByTitle ?? 'Not linked to a replacement'}</dd>
-                  </div>
-                  <div className="flex flex-wrap gap-x-2">
-                    <dt className="font-medium text-zinc-800">Recorded:</dt>
-                    <dd>{formatDateTime(entry.item.createdAt)}</dd>
-                  </div>
-                  <div className="flex flex-wrap gap-x-2">
-                    <dt className="font-medium text-zinc-800">Superseded:</dt>
-                    <dd>{formatDateTime(entry.item.updatedAt)}</dd>
-                  </div>
-                  <div className="flex flex-wrap gap-x-2">
-                    <dt className="font-medium text-zinc-800">Source:</dt>
-                    <dd>
-                      {entry.item.source
-                        ? [
-                            entry.item.source.type,
-                            entry.item.source.attribution,
-                            entry.item.source.location,
-                            entry.item.source.note,
-                          ]
-                            .filter(Boolean)
-                            .join(' · ') || 'Source recorded without details'
-                        : 'Source not recorded'}
-                    </dd>
-                  </div>
-                  <div className="flex flex-wrap gap-x-2">
-                    <dt className="font-medium text-zinc-800">Evidence ingested:</dt>
-                    <dd>{formatDateTime(entry.item.source?.ingestedAt ?? null)}</dd>
-                  </div>
-                  {entry.item.source?.note && (
-                    <div>
-                      <dt className="font-medium text-zinc-800">Reason:</dt>
-                      <dd className="mt-0.5">{entry.item.source.note}</dd>
-                    </div>
-                  )}
-                </dl>
-              </li>
+              <SupersededEntryCard key={entry.item.id} entry={entry} />
             ))}
           </ul>
         )}
       </div>
     </details>
+  );
+}
+
+function SupersededEntryCard({ entry }: { entry: SupersededEntry }) {
+  const completionState = getSupersededCompletionState(entry.item.devStatus, entry.oldAudits);
+  const completionClasses =
+    completionState === 'Completed before replacement'
+      ? 'border-emerald-200 bg-emerald-50'
+      : completionState === 'Was completed, then marked incomplete'
+        ? 'border-amber-200 bg-amber-50'
+        : 'border-zinc-200 bg-zinc-100';
+
+  return (
+    <li className="rounded-lg border border-zinc-200 bg-zinc-50 p-4 text-sm">
+      <p className="text-xs font-semibold uppercase tracking-wide text-zinc-600">
+        Retired checklist item
+      </p>
+      <p className="mt-1 font-medium text-zinc-900">{entry.item.title}</p>
+      {entry.item.description && <p className="mt-1 text-zinc-600">{entry.item.description}</p>}
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <div className={cn('rounded-md border p-3', completionClasses)}>
+          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-700">
+            Completion state
+          </p>
+          <p className="mt-1 font-medium text-zinc-900">{completionState}</p>
+        </div>
+        <div className="rounded-md border border-amber-200 bg-amber-50 p-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-amber-900">
+            Replaced by
+          </p>
+          <p className="mt-1 font-medium text-zinc-900">
+            {entry.supersededByTitle?.trim() ||
+              entry.replacement?.title?.trim() ||
+              'No replacement linked'}
+          </p>
+        </div>
+      </div>
+      <dl className="mt-4 space-y-1.5 border-t border-zinc-200 pt-3 text-xs text-zinc-600">
+        <div className="flex flex-wrap gap-x-2">
+          <dt className="font-medium text-zinc-800">Recorded:</dt>
+          <dd>{formatDateTime(entry.item.createdAt)}</dd>
+        </div>
+        <div className="flex flex-wrap gap-x-2">
+          <dt className="font-medium text-zinc-800">Superseded:</dt>
+          <dd>{formatDateTime(entry.item.updatedAt)}</dd>
+        </div>
+        <div className="flex flex-wrap gap-x-2">
+          <dt className="font-medium text-zinc-800">Source:</dt>
+          <dd>
+            {entry.item.source
+              ? [
+                  entry.item.source.type,
+                  entry.item.source.attribution,
+                  entry.item.source.location,
+                  entry.item.source.note,
+                ]
+                  .filter(Boolean)
+                  .join(' · ') || 'Source recorded without details'
+              : 'Source not recorded'}
+          </dd>
+        </div>
+        <div className="flex flex-wrap gap-x-2">
+          <dt className="font-medium text-zinc-800">Evidence ingested:</dt>
+          <dd>{formatDateTime(entry.item.source?.ingestedAt ?? null)}</dd>
+        </div>
+        {entry.item.source?.note && (
+          <div>
+            <dt className="font-medium text-zinc-800">Reason:</dt>
+            <dd className="mt-0.5">{entry.item.source.note}</dd>
+          </div>
+        )}
+      </dl>
+    </li>
   );
 }
 
@@ -1448,14 +1492,61 @@ function ProposalEditor({
             </p>
           )}
           {draft.supersedes.length > 0 && (
-            <p className="mt-2 text-xs text-zinc-600">
-              <span className="font-medium text-zinc-800">Replaces:</span>{' '}
-              {draft.supersedes
-                .map(
-                  (id) => checklist.find((item) => item.id === id)?.title ?? 'Unknown requirement',
-                )
-                .join(', ')}
-            </p>
+            <section className="mt-4 space-y-3" aria-labelledby={`replacement-heading-${index}`}>
+              <h4
+                id={`replacement-heading-${index}`}
+                className="text-xs font-semibold uppercase tracking-wide text-amber-800"
+              >
+                Replacement proposed
+              </h4>
+              <ul className="space-y-3">
+                {draft.supersedes.map((id) => {
+                  const existing = checklist.find((item) => item.id === id);
+                  return (
+                    <li
+                      key={id}
+                      className="grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-stretch"
+                    >
+                      <div className="min-w-0 rounded-md border border-rose-200 bg-rose-50 p-3">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-rose-900">
+                          Existing requirement
+                        </p>
+                        <p className="mt-1 break-words font-medium text-zinc-950">
+                          {existing?.title ?? 'Unknown requirement'}
+                        </p>
+                        <p className="mt-1 text-xs text-zinc-700">
+                          {existing
+                            ? existing.devStatus === 'checked'
+                              ? 'Currently checked'
+                              : 'Currently unchecked'
+                            : 'Current state unavailable'}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 px-1 text-xs font-medium text-zinc-700 sm:flex-col sm:justify-center sm:px-0">
+                        <ArrowRight
+                          className="h-4 w-4 rotate-90 text-zinc-500 sm:rotate-0"
+                          aria-hidden="true"
+                        />
+                        <span>Replaced by</span>
+                      </div>
+                      <div className="min-w-0 rounded-md border border-amber-200 bg-amber-50 p-3">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-amber-900">
+                          Proposed replacement
+                        </p>
+                        <p className="mt-1 break-words font-medium text-zinc-950">{draft.title}</p>
+                        <p className="mt-1 text-xs text-zinc-700">
+                          Approval required before this takes effect
+                        </p>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+              <p className="text-xs leading-5 text-zinc-700">
+                Approval is required before the replacement takes effect and the existing
+                requirement is retired.
+              </p>
+            </section>
           )}
           {editing.has(index) && (
             <div className="mt-4 space-y-3 rounded-md bg-zinc-50 p-3">
