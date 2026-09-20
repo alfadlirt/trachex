@@ -145,6 +145,16 @@ export interface SearchRepository {
   search(query: string, projectId: string, limit?: number): Promise<SearchResult[]>;
 }
 
+export interface VectorIndexRepository {
+  readonly available: boolean;
+  indexSnapshot(snapshotId: string): Promise<void>;
+  search(query: string, projectId: string, limit?: number): Promise<SearchResult[]>;
+}
+
+export interface VectorEmbedder {
+  embedTexts(texts: string[]): Promise<Array<{ vector: number[] }>>;
+}
+
 export interface SearchResult {
   chunkId: string;
   snapshotId: string;
@@ -169,5 +179,6 @@ export interface UnitOfWork {
   sessions: SessionRepository;
   exports: ExportRepository;
   search: SearchRepository;
+  vectors?: VectorIndexRepository;
   agents?: AgentRepository;
 }

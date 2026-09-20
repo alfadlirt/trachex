@@ -73,6 +73,16 @@ export async function ingestSource(
     chunkCount = chunks.length;
   }
 
+  // Indexing is deliberately outside canonical persistence. A missing or failed
+  // semantic backend must not prevent the source/snapshot from being recorded.
+  if (uow.vectors?.available) {
+    try {
+      await uow.vectors.indexSnapshot(snapshot.id);
+    } catch {
+      // Retrieval falls back to the authoritative FTS index.
+    }
+  }
+
   const source: Source = {
     id: newId(),
     ticketId: input.ticketId,

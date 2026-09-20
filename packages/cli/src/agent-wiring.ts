@@ -7,6 +7,7 @@ import {
   type RunAgentFn,
   reconciliationOutputSchema,
   resolveProviderConfig,
+  retryTransientAgentCall,
   runAgentWithSchema,
 } from '@trachex/agent';
 import type { SearchRepository } from '@trachex/domain';
@@ -37,7 +38,12 @@ export function buildRealRunAgent(input: {
       args.instructions,
       schema,
     );
-    return runAgentWithSchema(agent, { prompt: args.userContent });
+    const retrievalPrompt = args.projectId
+      ? `\n\nBefore producing the proposal, call vectorSearch with query summarizing the adjustment and projectId "${args.projectId}". Use the returned indexed evidence when reconciling; do not invent a different projectId.`
+      : '';
+    return retryTransientAgentCall(() =>
+      runAgentWithSchema(agent, { prompt: `${args.userContent}${retrievalPrompt}` }),
+    );
   };
 }
 

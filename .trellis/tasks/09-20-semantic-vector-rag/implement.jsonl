@@ -1,0 +1,3 @@
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Storage, agent, dependency, and test quality requirements."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Vector initialization/indexing failure handling and canonical-data safety."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Ingestion to embedding/index to agent-tool provenance data flow."}

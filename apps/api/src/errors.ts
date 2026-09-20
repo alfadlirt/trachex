@@ -1,6 +1,6 @@
 import { DomainError } from '@trachex/domain';
 
-export type ApiStatus = 200 | 201 | 400 | 404 | 409 | 500;
+export type ApiStatus = 200 | 201 | 400 | 404 | 409 | 500 | 502;
 
 export function statusForError(error: unknown): ApiStatus {
   if (error instanceof DomainError) {
@@ -20,6 +20,11 @@ export function statusForError(error: unknown): ApiStatus {
     return 400;
   }
   if (error instanceof Error && 'code' in error && error.code === 'INVALID_UPLOAD') return 400;
+  if (
+    error instanceof Error &&
+    /cloudflare|bad gateway|origin server|502|503|504/i.test(error.message)
+  )
+    return 502;
   return 500;
 }
 
@@ -32,6 +37,18 @@ export function errorPayload(error: unknown): { error: { code: string; message: 
   }
   if (error instanceof Error && 'code' in error && error.code === 'INVALID_UPLOAD') {
     return { error: { code: 'INVALID_UPLOAD', message: error.message } };
+  }
+  if (
+    error instanceof Error &&
+    /cloudflare|bad gateway|origin server|502|503|504/i.test(error.message)
+  ) {
+    return {
+      error: {
+        code: 'UPSTREAM_PROVIDER',
+        message:
+          'The AI provider is temporarily unavailable. Please wait and retry the adjustment.',
+      },
+    };
   }
   return {
     error: {

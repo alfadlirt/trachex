@@ -4,7 +4,7 @@ export interface Migration {
   sql: string;
 }
 
-export const SCHEMA_VERSION = 8;
+export const SCHEMA_VERSION = 9;
 
 export const migrations: Migration[] = [
   {
@@ -308,6 +308,19 @@ CREATE INDEX idx_review_findings_subject ON review_findings(subject_id);
     sql: `
 CREATE TABLE evidence_references (id TEXT PRIMARY KEY, subject_id TEXT NOT NULL REFERENCES subjects(id), source_id TEXT REFERENCES sources(id), chunk_id TEXT, excerpt TEXT NOT NULL, retrieval_metadata TEXT NOT NULL, created_at TEXT NOT NULL);
 CREATE INDEX idx_evidence_references_subject ON evidence_references(subject_id);
+`,
+  },
+  {
+    version: 9,
+    name: 'semantic-vector-index',
+    sql: `
+CREATE TABLE vector_chunks (
+  chunk_id TEXT PRIMARY KEY REFERENCES chunks(id) ON DELETE CASCADE,
+  snapshot_id TEXT NOT NULL REFERENCES snapshots(id) ON DELETE CASCADE,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  embedding BLOB NOT NULL
+);
+CREATE INDEX idx_vector_chunks_project ON vector_chunks(project_id);
 `,
   },
 ];

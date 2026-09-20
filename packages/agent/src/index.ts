@@ -6,4 +6,5 @@ export * from './observability.ts';
 export * from './pipeline.ts';
 export * from './prompts.ts';
 export * from './provider.ts';
+export { retryTransientAgentCall } from './retry.ts';
 export * from './schemas.ts';

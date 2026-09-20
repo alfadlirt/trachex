@@ -185,6 +185,9 @@ export function createRoutes(deps: RouteDeps): Hono {
         201,
       );
     } catch (error) {
+      process.stderr.write(
+        `[trachex] adjustment failed: ${JSON.stringify(inspectRouteError(error))}\n`,
+      );
       return c.json(errorPayload(error), statusForError(error));
     }
   });
@@ -281,4 +284,12 @@ export function createRoutes(deps: RouteDeps): Hono {
   });
 
   return app;
+}
+
+function inspectRouteError(error: unknown) {
+  return {
+    name: error instanceof Error ? error.name : 'UnknownError',
+    message: error instanceof Error ? error.message : String(error),
+    cause: error instanceof Error && error.cause instanceof Error ? error.cause.message : undefined,
+  };
 }

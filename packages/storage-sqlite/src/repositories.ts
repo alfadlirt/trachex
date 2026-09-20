@@ -37,8 +37,11 @@ import type {
   Ticket,
   TicketRepository,
   UnitOfWork,
+  VectorEmbedder,
+  VectorIndexRepository,
 } from '@trachex/domain';
 import type Database from 'better-sqlite3';
+import { createQdrantVectorRepository, type QdrantClient } from './qdrant.ts';
 
 type Row = Record<string, unknown>;
 
@@ -1308,6 +1311,147 @@ export class SqliteSearchRepository implements SearchRepository {
   }
 }
 
+function vectorBuffer(values: number[]): Buffer {
+  return Buffer.from(new Float32Array(values).buffer);
+}
+
+function bufferVector(value: unknown): number[] {
+  const bytes = value instanceof Uint8Array ? value : Buffer.from(value as ArrayBuffer);
+  return Array.from(new Float32Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 4));
+}
+
+export class SqliteVectorRepository implements VectorIndexRepository {
+  readonly available: boolean;
+  private readonly db: Database.Database;
+  private readonly embedder: VectorEmbedder | undefined;
+  private readonly vecAvailable: boolean;
+
+  constructor(db: Database.Database, embedder?: VectorEmbedder) {
+    this.db = db;
+    this.embedder = embedder;
+    this.available = embedder !== undefined;
+    try {
+      db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS vector_chunks_vec USING vec0(
+        embedding float[384],
+        chunk_id text primary key,
+        project_id text,
+        snapshot_id text,
+        content text,
+        location text,
+        rel_path text
+      )`);
+      this.vecAvailable = true;
+    } catch {
+      this.vecAvailable = false;
+    }
+  }
+
+  async indexSnapshot(snapshotId: string): Promise<void> {
+    if (!this.embedder) return;
+    const rows = this.db
+      .prepare(`SELECT c.id, c.content, c.chunk_index, c.location, s.project_id, s.rel_path
+      FROM chunks c JOIN snapshots s ON s.id = c.snapshot_id WHERE c.snapshot_id = ? ORDER BY c.chunk_index`)
+      .all(snapshotId) as Row[];
+    const vectors = await this.embedder.embedTexts(rows.map((row) => String(row.content)));
+    const insert = this.db.prepare(
+      'INSERT OR REPLACE INTO vector_chunks (chunk_id, snapshot_id, project_id, embedding) VALUES (?, ?, ?, ?)',
+    );
+    const vecInsert = this.vecAvailable
+      ? this.db.prepare(
+          `INSERT OR REPLACE INTO vector_chunks_vec
+           (embedding, chunk_id, project_id, snapshot_id, content, location, rel_path)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        )
+      : null;
+    const tx = this.db.transaction(() =>
+      rows.forEach((row, index) => {
+        const vector = vectors[index];
+        if (vector)
+          insert.run(
+            String(row.id),
+            snapshotId,
+            String(row.project_id),
+            vectorBuffer(vector.vector),
+          );
+        if (vector && vecInsert) {
+          try {
+            vecInsert.run(
+              vectorBuffer(vector.vector),
+              String(row.id),
+              String(row.project_id),
+              snapshotId,
+              String(row.content),
+              row.location == null ? null : String(row.location),
+              row.rel_path == null ? null : String(row.rel_path),
+            );
+          } catch {
+            // The persisted cosine index remains the portable local fallback.
+          }
+        }
+      }),
+    );
+    tx();
+  }
+
+  async search(query: string, projectId: string, limit = 10): Promise<SearchResult[]> {
+    if (!this.embedder) return [];
+    const [queryEmbedding] = await this.embedder.embedTexts([query]);
+    const queryVector = queryEmbedding?.vector;
+    if (!queryVector) return [];
+    if (this.vecAvailable) {
+      try {
+        const rows = this.db
+          .prepare(
+            `SELECT chunk_id, snapshot_id, project_id, content, location, rel_path, distance
+             FROM vector_chunks_vec
+             WHERE embedding MATCH ? AND k = ? AND project_id = ?
+             ORDER BY distance`,
+          )
+          .all(vectorBuffer(queryVector), limit, projectId) as Row[];
+        if (rows.length > 0) {
+          return rows.map((row) => ({
+            chunkId: String(row.chunk_id),
+            snapshotId: String(row.snapshot_id),
+            projectId: String(row.project_id),
+            content: String(row.content),
+            location: row.location == null ? null : String(row.location),
+            relPath: row.rel_path == null ? null : String(row.rel_path),
+            score: Number(row.distance),
+          }));
+        }
+      } catch {
+        // Fall back to the persisted cosine path below.
+      }
+    }
+    const rows = this.db
+      .prepare(`SELECT v.embedding, c.id AS chunk_id, c.snapshot_id, s.project_id,
+      c.content, c.location, s.rel_path FROM vector_chunks v JOIN chunks c ON c.id = v.chunk_id
+      JOIN snapshots s ON s.id = c.snapshot_id WHERE v.project_id = ?`)
+      .all(projectId) as Row[];
+    const norm = Math.sqrt(queryVector.reduce((sum, value) => sum + value * value, 0)) || 1;
+    return rows
+      .map((row) => {
+        const vector = bufferVector(row.embedding);
+        const denominator =
+          (Math.sqrt(vector.reduce((sum, value) => sum + value * value, 0)) || 1) * norm;
+        const score =
+          vector.reduce((sum, value, index) => sum + value * (queryVector[index] ?? 0), 0) /
+          denominator;
+        return {
+          chunkId: String(row.chunk_id),
+          snapshotId: String(row.snapshot_id),
+          projectId: String(row.project_id),
+          content: String(row.content),
+          location: row.location == null ? null : String(row.location),
+          relPath: String(row.rel_path),
+          score,
+        };
+      })
+      .sort((a, b) => b.score - a.score)
+      .slice(0, Math.max(0, limit));
+  }
+}
+
 export class SqliteUnitOfWork implements UnitOfWork {
   readonly projects: ProjectRepository;
   readonly repositories: RepositoryRepository;
@@ -1323,8 +1467,16 @@ export class SqliteUnitOfWork implements UnitOfWork {
   readonly exports: ExportRepository;
   readonly search: SearchRepository;
   readonly agents: AgentRepository;
+  readonly vectors: VectorIndexRepository;
 
-  constructor(db: Database.Database) {
+  constructor(
+    db: Database.Database,
+    options: {
+      embedder?: VectorEmbedder;
+      vectorBackend?: 'sqlite' | 'qdrant';
+      qdrantClient?: QdrantClient;
+    } = {},
+  ) {
     this.projects = new SqliteProjectRepository(db);
     this.repositories = new SqliteRepositoryRepository(db);
     this.tickets = new SqliteTicketRepository(db);
@@ -1337,7 +1489,28 @@ export class SqliteUnitOfWork implements UnitOfWork {
     this.completionAudits = new SqliteCompletionAuditRepository(db);
     this.sessions = new SqliteSessionRepository(db);
     this.exports = new SqliteExportRepository(db);
-    this.search = new SqliteSearchRepository(db);
+    const lexicalSearch = new SqliteSearchRepository(db);
+    const vectorSearch =
+      options.vectorBackend === 'qdrant' && options.qdrantClient && options.embedder
+        ? createQdrantVectorRepository({
+            db,
+            client: options.qdrantClient,
+            embedder: options.embedder,
+          })
+        : new SqliteVectorRepository(db, options.embedder);
+    this.search = options.embedder
+      ? {
+          async search(query, projectId, limit = 10) {
+            try {
+              const results = await vectorSearch.search(query, projectId, limit);
+              return results.length > 0 ? results : lexicalSearch.search(query, projectId, limit);
+            } catch {
+              return lexicalSearch.search(query, projectId, limit);
+            }
+          },
+        }
+      : lexicalSearch;
+    this.vectors = vectorSearch;
     this.agents = new SqliteAgentRepository(db);
   }
 }

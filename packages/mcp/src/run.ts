@@ -4,7 +4,13 @@ import type { Readable, Writable } from 'node:stream';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import type { RunAgentFn } from '@trachex/agent';
 import { trachexAppDir } from '@trachex/shared';
-import { migrate, openDatabase, SqliteUnitOfWork } from '@trachex/storage-sqlite';
+import {
+  createLazyLocalEmbedder,
+  migrate,
+  openDatabase,
+  resolveVectorBackend,
+  SqliteUnitOfWork,
+} from '@trachex/storage-sqlite';
 import { createMcpServer } from './server.ts';
 
 export interface RunMcpInput {
@@ -21,7 +27,12 @@ export async function runMcpServer(input: RunMcpInput): Promise<void> {
   mkdirSync(appDir, { recursive: true });
   const db = openDatabase({ path: `${appDir}/trachex.db` });
   migrate(db);
-  const uow = new SqliteUnitOfWork(db);
+  const vector = resolveVectorBackend();
+  const uow = new SqliteUnitOfWork(db, {
+    embedder: createLazyLocalEmbedder(),
+    vectorBackend: vector.backend,
+    ...(vector.qdrantClient ? { qdrantClient: vector.qdrantClient } : {}),
+  });
 
   try {
     const project = await uow.projects.findBySlug(input.projectSlug);

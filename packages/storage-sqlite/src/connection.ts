@@ -1,6 +1,7 @@
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import Database from 'better-sqlite3';
+import { load as loadVec } from 'sqlite-vec';
 import { migrations } from './migrations.ts';
 
 export interface OpenOptions {
@@ -16,6 +17,11 @@ export function openDatabase(options: OpenOptions): Database.Database {
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
   db.pragma(`busy_timeout = ${options.busyTimeoutMs ?? 5000}`);
+  try {
+    loadVec(db);
+  } catch {
+    // Native vector search is optional; the FTS5 repository remains available.
+  }
   return db;
 }
 

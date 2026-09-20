@@ -1,7 +1,13 @@
 import { mkdirSync } from 'node:fs';
 import type { UnitOfWork } from '@trachex/domain';
 import { trachexAppDir } from '@trachex/shared';
-import { migrate, openDatabase, SqliteUnitOfWork } from '@trachex/storage-sqlite';
+import {
+  createLazyLocalEmbedder,
+  migrate,
+  openDatabase,
+  resolveVectorBackend,
+  SqliteUnitOfWork,
+} from '@trachex/storage-sqlite';
 
 export interface ApiContext {
   appDir: string;
@@ -9,9 +15,21 @@ export interface ApiContext {
   uow: UnitOfWork;
 }
 
-export function openApiContext(appDir = trachexAppDir()): ApiContext {
+export function openApiContext(
+  appDir = trachexAppDir(),
+  env: NodeJS.ProcessEnv = process.env,
+): ApiContext {
   mkdirSync(appDir, { recursive: true });
   const db = openDatabase({ path: `${appDir}/trachex.db` });
   migrate(db);
-  return { appDir, db, uow: new SqliteUnitOfWork(db) };
+  const vector = resolveVectorBackend(env);
+  return {
+    appDir,
+    db,
+    uow: new SqliteUnitOfWork(db, {
+      embedder: createLazyLocalEmbedder(),
+      vectorBackend: vector.backend,
+      ...(vector.qdrantClient ? { qdrantClient: vector.qdrantClient } : {}),
+    }),
+  };
 }

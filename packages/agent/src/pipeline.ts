@@ -62,6 +62,7 @@ export async function runExtraction(uow: UnitOfWork, deps: PipelineDeps, input: 
       userContent: input.currentRequirements
         ? `${input.currentRequirements}\n\nAdjustment source:\n${input.content}`
         : input.content,
+      projectId: input.projectId,
       outputSchema: extractionOutputSchema,
     });
     const proposal = await createProposal(uow, {
@@ -103,6 +104,7 @@ export async function runReconciliation(uow: UnitOfWork, deps: PipelineDeps, inp
       userContent: input.currentRequirements
         ? `${input.currentRequirements}\n\nAdjustment source:\n${input.content}`
         : input.content,
+      projectId: input.projectId,
       outputSchema: reconciliationOutputSchema,
     });
     const proposal = await createProposal(uow, {

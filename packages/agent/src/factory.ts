@@ -15,14 +15,15 @@ export interface AgentDeps {
 export type RunAgentFn = (input: {
   instructions: string;
   userContent: string;
+  projectId?: string;
   outputSchema: z.ZodSchema<unknown>;
 }) => Promise<unknown>;
 
 export function createSearchTool(search: SearchRepository) {
   return createTool({
-    name: 'search_context',
+    name: 'vectorSearch',
     description:
-      'Search ingested project context (sources, notes, documents) using verified lexical retrieval and return chunk text with provenance. Semantic vector retrieval is not enabled yet.',
+      'Search indexed project context and return chunk text with provenance. Uses semantic retrieval when configured and an explicit lexical fallback when it is unavailable.',
     inputSchema: z.object({
       query: z.string().min(1),
       projectId: z.string().min(1),

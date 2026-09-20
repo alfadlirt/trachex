@@ -63,6 +63,43 @@ test('ingest file creates snapshot, chunks, and searchable provenance', async ()
   }
 });
 
+test('vector index scopes semantic results and preserves provenance', async () => {
+  const dir = tempDir();
+  try {
+    const db = openDb(dir);
+    const embedder = {
+      async embedTexts(texts: string[]) {
+        return texts.map((text) => {
+          const vector = Array.from({ length: 384 }, () => 0);
+          vector[0] = text.includes('VIP') ? 1 : 0;
+          vector[1] = text.includes('cap') ? 1 : 0;
+          return { vector };
+        });
+      },
+    };
+    const uow = new SqliteUnitOfWork(db, { embedder });
+    const { project, ticket } = await seed(uow);
+    const result = await ingestFile(uow, {
+      appDir: dir,
+      projectId: project.id,
+      ticketId: ticket.id,
+      type: 'fsd',
+      relPath: 'docs/vector.md',
+      contentKind: 'markdown',
+      content: 'VIP customers are exempt from the cap.',
+    });
+
+    await uow.vectors.indexSnapshot(result.snapshot.id);
+    const hits = await uow.vectors.search('VIP exemption', project.id, 5);
+    assert.equal(hits.length, 1);
+    assert.equal(hits[0]?.relPath, 'docs/vector.md');
+    assert.equal(hits[0]?.projectId, project.id);
+    db.close();
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('re-ingesting changed content creates a new snapshot and preserves the old', async () => {
   const dir = tempDir();
   try {

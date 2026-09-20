@@ -7,6 +7,7 @@ import {
   createTrachexAgent,
   type RunAgentFn,
   resolveProviderConfig,
+  retryTransientAgentCall,
   runAgentWithSchema,
 } from '@trachex/agent';
 import { Hono } from 'hono';
@@ -49,7 +50,12 @@ export function buildRunAgent(ctx: ApiContext, env: NodeJS.ProcessEnv = process.
       args.instructions,
       args.outputSchema,
     );
-    return runAgentWithSchema(agent, { prompt: args.userContent });
+    const retrievalPrompt = args.projectId
+      ? `\n\nBefore producing the proposal, call vectorSearch with query summarizing the adjustment and projectId "${args.projectId}". Use the returned indexed evidence when reconciling; do not invent a different projectId.`
+      : '';
+    return retryTransientAgentCall(() =>
+      runAgentWithSchema(agent, { prompt: `${args.userContent}${retrievalPrompt}` }),
+    );
   };
 }
 
