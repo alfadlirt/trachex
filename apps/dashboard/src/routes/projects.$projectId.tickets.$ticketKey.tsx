@@ -32,14 +32,20 @@ function TicketCanvasPage() {
   const [dirtyProposals, setDirtyProposals] = useState<Set<string>>(new Set());
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
 
-  const load = () => {
+  const load = useCallback(() => {
     api
       .getCanvas(projectId, ticketKey)
       .then(setData)
       .catch((e) => setError(String(e)));
-  };
+  }, [projectId, ticketKey]);
 
-  useEffect(load, [projectId, ticketKey]);
+  useEffect(load, [load]);
+  useEffect(() => {
+    if (!data?.adjustmentJobs.some((job) => job.status === 'queued' || job.status === 'processing'))
+      return;
+    const timer = window.setInterval(load, 2500);
+    return () => window.clearInterval(timer);
+  }, [data?.adjustmentJobs, load]);
 
   const setProposalDirty = useCallback((proposalId: string, dirty: boolean) => {
     setDirtyProposals((current) => {
@@ -177,6 +183,37 @@ function TicketCanvasPage() {
       </div>
 
       <TicketEvidenceSummary data={data} pendingCount={pending.length} />
+      <section
+        className="border-b border-zinc-200 px-5 py-4 sm:px-8"
+        aria-label="Adjustment processing"
+      >
+        <h2 className="font-semibold text-zinc-950">Adjustment processing</h2>
+        <div className="mt-2 space-y-2">
+          {data.adjustmentJobs.length === 0 && (
+            <p className="text-sm text-zinc-500">No adjustments yet.</p>
+          )}
+          {data.adjustmentJobs.map((job) => (
+            <div
+              key={job.id}
+              className="flex flex-wrap items-center justify-between gap-2 rounded border border-zinc-200 p-3 text-sm"
+            >
+              <span>
+                {job.sourceType} · {job.status}
+              </span>
+              {job.error && <span className="text-red-700">{job.error}</span>}
+              {job.status === 'failed' && (
+                <button
+                  type="button"
+                  className="rounded bg-zinc-900 px-3 py-2 text-white"
+                  onClick={() => api.retryAdjustment(projectId, ticketKey, job.id).then(load)}
+                >
+                  Retry
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
 
       <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_380px]">
         <div className="min-w-0 px-5 py-6 sm:px-8">

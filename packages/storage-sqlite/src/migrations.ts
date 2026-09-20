@@ -4,7 +4,7 @@ export interface Migration {
   sql: string;
 }
 
-export const SCHEMA_VERSION = 9;
+export const SCHEMA_VERSION = 10;
 
 export const migrations: Migration[] = [
   {
@@ -321,6 +321,33 @@ CREATE TABLE vector_chunks (
   embedding BLOB NOT NULL
 );
 CREATE INDEX idx_vector_chunks_project ON vector_chunks(project_id);
+`,
+  },
+  {
+    version: 10,
+    name: 'adjustment-jobs',
+    sql: `
+CREATE TABLE adjustment_jobs (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL REFERENCES projects(id),
+  ticket_id TEXT NOT NULL REFERENCES tickets(id),
+  source_id TEXT NOT NULL REFERENCES sources(id),
+  queue_job_id TEXT,
+  status TEXT NOT NULL,
+  source_type TEXT NOT NULL,
+  attribution TEXT,
+  source_location TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  started_at TEXT,
+  completed_at TEXT,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  error TEXT,
+  proposal_id TEXT REFERENCES proposals(id)
+);
+CREATE INDEX idx_adjustment_jobs_ticket ON adjustment_jobs(ticket_id, created_at);
+CREATE UNIQUE INDEX idx_adjustment_jobs_active_ticket ON adjustment_jobs(ticket_id)
+  WHERE status IN ('queued', 'processing');
 `,
   },
 ];

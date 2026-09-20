@@ -21,6 +21,9 @@
     "@trachex/domain": "workspace:*",
     "@trachex/shared": "workspace:*",
     "@trachex/storage-sqlite": "workspace:*",
+    "@trachex/worker": "workspace:*",
+    "bullmq": "^6.3.8",
+    "ioredis": "^5.6.1",
     "hono": "^4.13.7",
     "pdf-parse": "^2.4.5",
     "zod": "^4.5.4"

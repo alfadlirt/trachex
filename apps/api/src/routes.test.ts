@@ -29,7 +29,12 @@ async function setup() {
     key: 'TICKET-1',
     title: 'Loyalty',
   });
-  const app = createApp({ appDir, env: { OPENAI_API_KEY: 'test' }, runAgent });
+  const app = createApp({
+    appDir,
+    env: { OPENAI_API_KEY: 'test' },
+    runAgent,
+    enqueueAdjustment: async (jobId) => `test-queue-${jobId}`,
+  });
   return { appDir, ctx, project, ticket, app };
 }
 
@@ -112,9 +117,10 @@ test('POST adjustments creates a pending proposal', async () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ source: 'chat', attribution: 'Budi', note: 'cap 15%' }),
     });
-    assert.equal(res.status, 201);
-    const body = (await res.json()) as { proposal: { status: string } };
-    assert.equal(body.proposal.status, 'pending');
+    assert.equal(res.status, 202);
+    const body = (await res.json()) as { job: { status: string; queueJobId: string } };
+    assert.equal(body.job.status, 'queued');
+    assert.equal(body.job.queueJobId.startsWith('test-queue-'), true);
   } finally {
     ctx.db.close();
     rmSync(appDir, { recursive: true, force: true });
@@ -135,12 +141,12 @@ test('POST multipart adjustment ingests a Markdown upload', async () => {
       method: 'POST',
       body: form,
     });
-    assert.equal(res.status, 201);
+    assert.equal(res.status, 202);
     const body = (await res.json()) as {
-      proposal: { status: string };
+      job: { status: string };
       source: { location: string | null };
     };
-    assert.equal(body.proposal.status, 'pending');
+    assert.equal(body.job.status, 'queued');
     assert.equal(body.source.location, 'clarification.md');
   } finally {
     ctx.db.close();

@@ -13,4 +13,8 @@ export {
   createQdrantVectorRepository,
   rebuildQdrantFromSnapshots,
 } from './qdrant.ts';
-export { SqliteUnitOfWork, SqliteVectorRepository } from './repositories.ts';
+export {
+  SqliteAdjustmentJobRepository,
+  SqliteUnitOfWork,
+  SqliteVectorRepository,
+} from './repositories.ts';

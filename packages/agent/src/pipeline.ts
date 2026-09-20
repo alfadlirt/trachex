@@ -36,6 +36,7 @@ export interface PipelineInput {
   location?: string;
   note?: string;
   currentRequirements?: string;
+  sourceId?: string;
 }
 
 export async function runExtraction(uow: UnitOfWork, deps: PipelineDeps, input: PipelineInput) {
@@ -81,19 +82,22 @@ export async function runExtraction(uow: UnitOfWork, deps: PipelineDeps, input: 
 }
 
 export async function runReconciliation(uow: UnitOfWork, deps: PipelineDeps, input: PipelineInput) {
-  const source = await ingestFile(uow, {
-    appDir: input.appDir,
-    projectId: input.projectId,
-    ticketId: input.ticketId,
-    type: input.type,
-    ...(input.attribution !== undefined ? { attribution: input.attribution } : {}),
-    ...(input.sourceEventAt !== undefined ? { sourceEventAt: input.sourceEventAt } : {}),
-    ...(input.location !== undefined ? { location: input.location } : {}),
-    ...(input.note !== undefined ? { note: input.note } : {}),
-    relPath: input.relPath,
-    contentKind: input.contentKind,
-    content: input.content,
-  });
+  const source = input.sourceId
+    ? { source: await uow.sources.findById(input.sourceId) }
+    : await ingestFile(uow, {
+        appDir: input.appDir,
+        projectId: input.projectId,
+        ticketId: input.ticketId,
+        type: input.type,
+        ...(input.attribution !== undefined ? { attribution: input.attribution } : {}),
+        ...(input.sourceEventAt !== undefined ? { sourceEventAt: input.sourceEventAt } : {}),
+        ...(input.location !== undefined ? { location: input.location } : {}),
+        ...(input.note !== undefined ? { note: input.note } : {}),
+        relPath: input.relPath,
+        contentKind: input.contentKind,
+        content: input.content,
+      });
+  if (!source.source) throw new Error(`adjustment source ${input.sourceId} not found`);
 
   try {
     const output = await deps.runAgent({

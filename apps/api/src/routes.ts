@@ -1,4 +1,4 @@
-import { type RunAgentFn, runReconciliation } from '@trachex/agent';
+import type { RunAgentFn } from '@trachex/agent';
 import type { ProposalOutput } from '@trachex/domain';
 import {
   approveProposal,
@@ -29,11 +29,15 @@ import {
 export interface RouteDeps {
   ctx: ApiContext;
   runAgent: RunAgentFn;
+  enqueueAdjustment?: (jobId: string) => Promise<string>;
 }
 
 export function createRoutes(deps: RouteDeps): Hono {
   const app = new Hono();
-  const { ctx, runAgent } = deps;
+  const { ctx } = deps;
+  if (!ctx.uow.adjustmentJobs) throw new Error('Adjustment queue storage is unavailable.');
+  const adjustmentJobs = ctx.uow.adjustmentJobs;
+  const enqueue = deps.enqueueAdjustment;
 
   app.get('/projects', async (c) => {
     const projects = await ctx.uow.projects.list();
@@ -111,6 +115,7 @@ export function createRoutes(deps: RouteDeps): Hono {
       impacts,
       scenarios,
       timeline: summary.timeline,
+      adjustmentJobs: (await ctx.uow.adjustmentJobs?.listByTicket(ticket.id)) ?? [],
     });
   });
 
@@ -158,10 +163,21 @@ export function createRoutes(deps: RouteDeps): Hono {
         relPath = upload.displayName.replace(/[^a-zA-Z0-9._-]/g, '_');
         contentKind = upload.extension === '.pdf' ? 'pdf-text' : 'markdown';
       }
-      const result = await runReconciliation(
-        ctx.uow,
-        { runAgent },
-        {
+      if (!ctx.uow.adjustmentJobs) throw new Error('Adjustment queue storage is unavailable.');
+      const existing = await adjustmentJobs.findActiveByTicket(ticket.id);
+      if (existing)
+        return c.json(
+          {
+            error: {
+              code: 'CONFLICT',
+              message: `Adjustment job ${existing.id} is already ${existing.status}.`,
+            },
+            job: existing,
+          },
+          409,
+        );
+      const sourceResult = await import('@trachex/storage-sqlite').then(({ ingestFile }) =>
+        ingestFile(ctx.uow, {
           appDir: ctx.appDir,
           projectId: project.id,
           ticketId: ticket.id,
@@ -171,24 +187,105 @@ export function createRoutes(deps: RouteDeps): Hono {
           contentKind,
           content,
           ...(body.file ? { location: relPath } : {}),
-        },
+          ...(body.note ? { note: body.note } : {}),
+        }),
       );
-      return c.json(
-        {
-          proposal: {
-            id: result.proposal.id,
-            kind: result.proposal.kind,
-            status: result.proposal.status,
-          },
-          source: result.source,
-        },
-        201,
-      );
+      const now = new Date().toISOString();
+      const job = await adjustmentJobs.create({
+        id: crypto.randomUUID(),
+        projectId: project.id,
+        ticketId: ticket.id,
+        sourceId: sourceResult.source.id,
+        queueJobId: null,
+        status: 'queued',
+        sourceType: body.source,
+        attribution: body.attribution ?? null,
+        sourceLocation: relPath,
+        createdAt: now,
+        updatedAt: now,
+        startedAt: null,
+        completedAt: null,
+        attempts: 0,
+        error: null,
+        proposalId: null,
+      });
+      if (!enqueue) throw new Error('Adjustment queue is not configured. Set TRACHEX_REDIS_URL.');
+      let queueJobId: string;
+      try {
+        queueJobId = await enqueue(job.id);
+      } catch (error) {
+        await ctx.uow.adjustmentJobs.update({
+          ...job,
+          status: 'failed',
+          error: `Adjustment queue unavailable. Retry this upload. ${error instanceof Error ? error.message : String(error)}`,
+          updatedAt: new Date().toISOString(),
+        });
+        throw error;
+      }
+      const queued = await adjustmentJobs.update({
+        ...job,
+        queueJobId,
+        updatedAt: new Date().toISOString(),
+      });
+      return c.json({ job: queued, source: sourceResult.source }, 202);
     } catch (error) {
       process.stderr.write(
         `[trachex] adjustment failed: ${JSON.stringify(inspectRouteError(error))}\n`,
       );
       return c.json(errorPayload(error), statusForError(error));
+    }
+  });
+
+  app.get('/projects/:projectId/tickets/:ticketKey/adjustments/jobs', async (c) => {
+    const ticket = await findTicket(ctx, c.req.param('projectId'), c.req.param('ticketKey'));
+    if (!ticket)
+      return c.json(errorPayload(new NotFoundError('ticket', c.req.param('ticketKey'))), 404);
+    return c.json({ jobs: (await ctx.uow.adjustmentJobs?.listByTicket(ticket.id)) ?? [] });
+  });
+
+  app.post('/projects/:projectId/tickets/:ticketKey/adjustments/jobs/:jobId/retry', async (c) => {
+    const ticket = await findTicket(ctx, c.req.param('projectId'), c.req.param('ticketKey'));
+    const job = await adjustmentJobs.findById(c.req.param('jobId'));
+    if (!ticket || !job || job.ticketId !== ticket.id)
+      return c.json(errorPayload(new NotFoundError('adjustment job', c.req.param('jobId'))), 404);
+    if (job.status !== 'failed')
+      return c.json(
+        { error: { code: 'INVALID_OPERATION', message: 'Only failed jobs can be retried.' } },
+        409,
+      );
+    const active = await adjustmentJobs.findActiveByTicket(ticket.id);
+    if (active)
+      return c.json(
+        {
+          error: { code: 'CONFLICT', message: `Adjustment job ${active.id} is already active.` },
+          job: active,
+        },
+        409,
+      );
+    const queued = await adjustmentJobs.update({
+      ...job,
+      status: 'queued',
+      error: null,
+      proposalId: null,
+      updatedAt: new Date().toISOString(),
+    });
+    if (!enqueue) throw new Error('Adjustment queue is not configured. Set TRACHEX_REDIS_URL.');
+    try {
+      const queueJobId = await enqueue(queued.id);
+      const enqueued = await adjustmentJobs.update({
+        ...queued,
+        queueJobId,
+        updatedAt: new Date().toISOString(),
+      });
+      return c.json({ job: enqueued }, 202);
+    } catch (error) {
+      await adjustmentJobs.update({
+        ...queued,
+        status: 'failed',
+        error: `Adjustment queue unavailable. Retry this job. ${error instanceof Error ? error.message : String(error)}`,
+        updatedAt: new Date().toISOString(),
+      });
+      throw error;
     }
   });
 
@@ -284,6 +381,11 @@ export function createRoutes(deps: RouteDeps): Hono {
   });
 
   return app;
+}
+
+async function findTicket(ctx: ApiContext, projectId: string, ticketKey: string) {
+  const project = await ctx.uow.projects.findById(projectId);
+  return project ? ctx.uow.tickets.findByProjectAndKey(project.id, ticketKey) : null;
 }
 
 function inspectRouteError(error: unknown) {

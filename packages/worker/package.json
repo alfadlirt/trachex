@@ -1,0 +1,25 @@
+{
+  "name": "@trachex/worker",
+  "version": "0.1.0",
+  "description": "BullMQ adjustment reconciliation worker.",
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": {
+    "dev": "tsx src/worker.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test src/*.test.ts"
+  },
+  "dependencies": {
+    "@trachex/agent": "workspace:*",
+    "@trachex/domain": "workspace:*",
+    "@trachex/shared": "workspace:*",
+    "@trachex/storage-sqlite": "workspace:*",
+    "@anvia/core": "1.1.2",
+    "@anvia/lens": "1.1.2",
+    "@anvia/logger": "1.1.2",
+    "@anvia/openai": "1.1.2",
+    "bullmq": "^6.3.8",
+    "ioredis": "^5.6.1"
+  },
+  "devDependencies": { "tsx": "^4.23.0", "typescript": "^7.0.2" }
+}

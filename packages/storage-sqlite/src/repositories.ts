@@ -1,4 +1,6 @@
 import type {
+  AdjustmentJob,
+  AdjustmentJobRepository,
   AgentRepository,
   AgentRun,
   ChatMessage,
@@ -131,6 +133,27 @@ function sourceFromRow(row: Row): Source {
     snapshotId: row.snapshot_id == null ? null : String(row.snapshot_id),
     location: row.location == null ? null : String(row.location),
     note: row.note == null ? null : String(row.note),
+  };
+}
+
+function adjustmentJobFromRow(row: Row): AdjustmentJob {
+  return {
+    id: String(row.id),
+    projectId: String(row.project_id),
+    ticketId: String(row.ticket_id),
+    sourceId: String(row.source_id),
+    queueJobId: row.queue_job_id == null ? null : String(row.queue_job_id),
+    status: String(row.status) as AdjustmentJob['status'],
+    sourceType: String(row.source_type) as AdjustmentJob['sourceType'],
+    attribution: row.attribution == null ? null : String(row.attribution),
+    sourceLocation: row.source_location == null ? null : String(row.source_location),
+    createdAt: String(row.created_at),
+    updatedAt: String(row.updated_at),
+    startedAt: row.started_at == null ? null : String(row.started_at),
+    completedAt: row.completed_at == null ? null : String(row.completed_at),
+    attempts: Number(row.attempts),
+    error: row.error == null ? null : String(row.error),
+    proposalId: row.proposal_id == null ? null : String(row.proposal_id),
   };
 }
 
@@ -719,6 +742,77 @@ export class SqliteSourceRepository implements SourceRepository {
       .prepare('SELECT * FROM sources WHERE ticket_id = ? ORDER BY ingested_at')
       .all(ticketId) as Row[];
     return rows.map(sourceFromRow);
+  }
+}
+
+export class SqliteAdjustmentJobRepository implements AdjustmentJobRepository {
+  private readonly db: Database.Database;
+  constructor(db: Database.Database) {
+    this.db = db;
+  }
+  async create(job: AdjustmentJob): Promise<AdjustmentJob> {
+    this.db
+      .prepare(
+        `INSERT INTO adjustment_jobs (id, project_id, ticket_id, source_id, queue_job_id, status, source_type, attribution, source_location, created_at, updated_at, started_at, completed_at, attempts, error, proposal_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        job.id,
+        job.projectId,
+        job.ticketId,
+        job.sourceId,
+        job.queueJobId,
+        job.status,
+        job.sourceType,
+        job.attribution,
+        job.sourceLocation,
+        job.createdAt,
+        job.updatedAt,
+        job.startedAt,
+        job.completedAt,
+        job.attempts,
+        job.error,
+        job.proposalId,
+      );
+    return job;
+  }
+  async findById(id: string) {
+    const row = this.db.prepare('SELECT * FROM adjustment_jobs WHERE id = ?').get(id) as
+      | Row
+      | undefined;
+    return row ? adjustmentJobFromRow(row) : null;
+  }
+  async findActiveByTicket(ticketId: string) {
+    const row = this.db
+      .prepare(
+        "SELECT * FROM adjustment_jobs WHERE ticket_id = ? AND status IN ('queued', 'processing') ORDER BY created_at DESC LIMIT 1",
+      )
+      .get(ticketId) as Row | undefined;
+    return row ? adjustmentJobFromRow(row) : null;
+  }
+  async listByTicket(ticketId: string) {
+    return (
+      this.db
+        .prepare('SELECT * FROM adjustment_jobs WHERE ticket_id = ? ORDER BY created_at DESC')
+        .all(ticketId) as Row[]
+    ).map(adjustmentJobFromRow);
+  }
+  async update(job: AdjustmentJob) {
+    this.db
+      .prepare(
+        `UPDATE adjustment_jobs SET queue_job_id=?, status=?, updated_at=?, started_at=?, completed_at=?, attempts=?, error=?, proposal_id=? WHERE id=?`,
+      )
+      .run(
+        job.queueJobId,
+        job.status,
+        job.updatedAt,
+        job.startedAt,
+        job.completedAt,
+        job.attempts,
+        job.error,
+        job.proposalId,
+        job.id,
+      );
+    return job;
   }
 }
 
@@ -1459,6 +1553,7 @@ export class SqliteUnitOfWork implements UnitOfWork {
   readonly subjects: SubjectRepository;
   readonly snapshots: SnapshotRepository;
   readonly sources: SourceRepository;
+  readonly adjustmentJobs: AdjustmentJobRepository;
   readonly chunks: ChunkRepository;
   readonly requirements: RequirementRepository;
   readonly proposals: ProposalRepository;
@@ -1483,6 +1578,7 @@ export class SqliteUnitOfWork implements UnitOfWork {
     this.subjects = new SqliteSubjectRepository(db);
     this.snapshots = new SqliteSnapshotRepository(db);
     this.sources = new SqliteSourceRepository(db);
+    this.adjustmentJobs = new SqliteAdjustmentJobRepository(db);
     this.chunks = new SqliteChunkRepository(db);
     this.requirements = new SqliteRequirementRepository(db);
     this.proposals = new SqliteProposalRepository(db);

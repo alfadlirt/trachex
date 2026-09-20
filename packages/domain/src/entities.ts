@@ -20,6 +20,26 @@ export type ProposalKind = 'extraction' | 'reconciliation' | 'impact' | 'scenari
 export type ProposalStatus = 'pending' | 'approved' | 'rejected';
 export type ActorType = 'human' | 'agent';
 export type MessageRole = 'user' | 'assistant' | 'tool';
+export type AdjustmentJobStatus = 'queued' | 'processing' | 'completed' | 'failed';
+
+export interface AdjustmentJob {
+  id: string;
+  projectId: string;
+  ticketId: string;
+  sourceId: string;
+  queueJobId: string | null;
+  status: AdjustmentJobStatus;
+  sourceType: SourceType;
+  attribution: string | null;
+  sourceLocation: string | null;
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+  startedAt: IsoDateTime | null;
+  completedAt: IsoDateTime | null;
+  attempts: number;
+  error: string | null;
+  proposalId: string | null;
+}
 
 export interface Project {
   id: string;

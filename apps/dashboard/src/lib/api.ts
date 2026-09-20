@@ -31,6 +31,15 @@ export interface Proposal {
   kind: string;
   status: 'pending' | 'approved' | 'rejected';
 }
+export interface AdjustmentJob {
+  id: string;
+  status: 'queued' | 'processing' | 'completed' | 'failed';
+  sourceType: string;
+  sourceLocation: string | null;
+  createdAt: string;
+  error: string | null;
+  proposalId: string | null;
+}
 
 export interface ProposalReviewDraft {
   title: string;
@@ -91,6 +100,7 @@ export interface TicketCanvas {
   impacts: Impact[];
   scenarios: Scenario[];
   timeline: TimelineEvent[];
+  adjustmentJobs: AdjustmentJob[];
 }
 
 export interface ChatMessage {
@@ -145,7 +155,7 @@ export const api = {
     ticketKey: string,
     input: { source: string; attribution?: string; note: string },
   ) =>
-    request<{ proposal: Proposal }>(`/api/projects/${projectId}/tickets/${ticketKey}/adjustments`, {
+    request<{ job: AdjustmentJob }>(`/api/projects/${projectId}/tickets/${ticketKey}/adjustments`, {
       method: 'POST',
       body: JSON.stringify(input),
     }),
@@ -159,11 +169,20 @@ export const api = {
     if (input.attribution) form.set('attribution', input.attribution);
     if (input.note) form.set('note', input.note);
     if (input.file) form.set('file', input.file);
-    return request<{ proposal: Proposal }>(
+    return request<{ job: AdjustmentJob }>(
       `/api/projects/${projectId}/tickets/${ticketKey}/adjustments`,
       { method: 'POST', body: form },
     );
   },
+  listAdjustmentJobs: (projectId: string, ticketKey: string) =>
+    request<{ jobs: AdjustmentJob[] }>(
+      `/api/projects/${projectId}/tickets/${ticketKey}/adjustments/jobs`,
+    ),
+  retryAdjustment: (projectId: string, ticketKey: string, jobId: string) =>
+    request<{ job: AdjustmentJob }>(
+      `/api/projects/${projectId}/tickets/${ticketKey}/adjustments/jobs/${jobId}/retry`,
+      { method: 'POST' },
+    ),
   approveProposal: (proposalId: string) =>
     request<{ status: string }>(`/api/proposals/${proposalId}/approve`, { method: 'POST' }),
   rejectProposal: (proposalId: string) =>

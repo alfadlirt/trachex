@@ -1,0 +1,4 @@
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Backend persistence, queue dependency, and test quality requirements."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Worker retry/failure behavior and canonical proposal safety."}
+{"file":".trellis/spec/frontend/directory-structure.md","reason":"Dashboard adjustment composer and ticket canvas ownership."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"API, SQLite job state, Redis transport, worker, and dashboard flow."}

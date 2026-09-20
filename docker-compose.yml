@@ -20,20 +20,54 @@ services:
       ANVIA_LENS_API_URL: ${ANVIA_LENS_API_URL:-}
       # Reserved for the future PostgreSQL storage adapter.
       DATABASE_URL: ${DATABASE_URL:-postgresql://trachex:trachex@postgres:5432/trachex}
-      # Qdrant is optional; SQLite FTS5 remains the current default.
-      QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
+      TRACHEX_VECTOR_BACKEND: ${TRACHEX_VECTOR_BACKEND:-sqlite}
+      QDRANT_URL: ${QDRANT_COMPOSE_URL:-http://qdrant:6333}
       QDRANT_API_KEY: ${QDRANT_API_KEY:-}
       QDRANT_COLLECTION: ${QDRANT_COLLECTION:-trachex}
+      TRACHEX_REDIS_URL: redis://redis:6379
     volumes:
       - trachex_data:/data/trachex
     expose:
       - "8000"
     restart: unless-stopped
 
-  # Enable with: docker compose -f docker-compose.prod.yml --profile vector up -d
+  redis:
+    image: redis:7-alpine
+    profiles: [local]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: pnpm --filter @trachex/worker dev
+    profiles: [local]
+    environment:
+      TRACHEX_HOME: /data/trachex
+      TRACHEX_REDIS_URL: redis://redis:6379
+      TRACHEX_PROVIDER: ${TRACHEX_PROVIDER:-openai}
+      TRACHEX_MODEL: ${TRACHEX_MODEL:-gpt-4o-mini}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      TRACHEX_VECTOR_BACKEND: ${TRACHEX_VECTOR_BACKEND:-sqlite}
+      QDRANT_URL: ${QDRANT_COMPOSE_URL:-http://qdrant:6333}
+      QDRANT_API_KEY: ${QDRANT_API_KEY:-}
+      QDRANT_COLLECTION: ${QDRANT_COLLECTION:-trachex}
+    volumes:
+      - trachex_data:/data/trachex
+    depends_on:
+      - redis
+    healthcheck:
+      disable: true
+    restart: unless-stopped
+
   qdrant:
     image: qdrant/qdrant:v1.18.2
-    profiles: [vector]
+    profiles: [local]
     ports:
       - "6333:6333"
       - "6334:6334"
@@ -68,3 +102,4 @@ volumes:
   trachex_data:
   qdrant_data:
   postgres_data:
+  redis_data:

@@ -12,6 +12,7 @@ allowBuilds:
   better-sqlite3: true
   protobufjs: true
   onnxruntime-node: true
+  msgpackr-extract: true
 
 minimumReleaseAgeExclude:
   - '@anvia/core@1.1.2'

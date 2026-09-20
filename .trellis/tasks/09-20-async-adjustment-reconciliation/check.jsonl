@@ -1,0 +1,4 @@
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Review queue persistence, dependency boundaries, and deterministic tests."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Review retry/failure behavior without canonical mutation."}
+{"file":".trellis/spec/frontend/directory-structure.md","reason":"Review processing cards, polling, retry controls, and mobile states."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Review consistency across API, database, Redis, worker, and UI."}

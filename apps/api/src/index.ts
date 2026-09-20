@@ -10,6 +10,7 @@ import {
   retryTransientAgentCall,
   runAgentWithSchema,
 } from '@trachex/agent';
+import { enqueueAdjustment } from '@trachex/worker';
 import { Hono } from 'hono';
 import { createChatRoutes } from './chat.ts';
 import { type ApiContext, openApiContext } from './context.ts';
@@ -36,6 +37,7 @@ export interface DashboardOptions {
   dashboardDist?: string;
   env?: NodeJS.ProcessEnv;
   runAgent?: RunAgentFn;
+  enqueueAdjustment?: (jobId: string) => Promise<string>;
 }
 
 export function buildRunAgent(ctx: ApiContext, env: NodeJS.ProcessEnv = process.env): RunAgentFn {
@@ -60,8 +62,10 @@ export function buildRunAgent(ctx: ApiContext, env: NodeJS.ProcessEnv = process.
 }
 
 export function createApp(options: DashboardOptions = {}) {
-  const ctx = openApiContext(options.appDir);
-  const runAgent = options.runAgent ?? buildRunAgent(ctx, options.env ?? process.env);
+  const env = options.env ?? process.env;
+  const ctx = openApiContext(options.appDir, env);
+  const runAgent = options.runAgent ?? buildRunAgent(ctx, env);
+  const redisUrl = env.TRACHEX_REDIS_URL;
   const app = new Hono();
 
   app.get(
@@ -72,7 +76,24 @@ export function createApp(options: DashboardOptions = {}) {
       }),
   );
 
-  app.route('/api', createRoutes({ ctx, runAgent }));
+  app.route(
+    '/api',
+    createRoutes({
+      ctx,
+      runAgent,
+      ...(redisUrl
+        ? {
+            enqueueAdjustment: async (jobId: string) => {
+              const queued = await enqueueAdjustment(redisUrl, jobId);
+              void queued.close();
+              return queued.queueJobId;
+            },
+          }
+        : options.enqueueAdjustment
+          ? { enqueueAdjustment: options.enqueueAdjustment }
+          : {}),
+    }),
+  );
   app.route('/api', createChatRoutes({ ctx, runAgent }));
 
   const dist = options.dashboardDist ?? DEFAULT_DIST;

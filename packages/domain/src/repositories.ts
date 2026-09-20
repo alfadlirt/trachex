@@ -1,4 +1,5 @@
 import type {
+  AdjustmentJob,
   AgentRun,
   ChatMessage,
   ChatSession,
@@ -77,6 +78,14 @@ export interface SourceRepository {
   create(source: Source): Promise<Source>;
   findById(id: string): Promise<Source | null>;
   listByTicket(ticketId: string): Promise<Source[]>;
+}
+
+export interface AdjustmentJobRepository {
+  create(job: AdjustmentJob): Promise<AdjustmentJob>;
+  findById(id: string): Promise<AdjustmentJob | null>;
+  findActiveByTicket(ticketId: string): Promise<AdjustmentJob | null>;
+  listByTicket(ticketId: string): Promise<AdjustmentJob[]>;
+  update(job: AdjustmentJob): Promise<AdjustmentJob>;
 }
 
 export interface ChunkRepository {
@@ -172,6 +181,7 @@ export interface UnitOfWork {
   subjects: SubjectRepository;
   snapshots: SnapshotRepository;
   sources: SourceRepository;
+  adjustmentJobs?: AdjustmentJobRepository;
   chunks: ChunkRepository;
   requirements: RequirementRepository;
   proposals: ProposalRepository;
