@@ -104,6 +104,12 @@ timeline, `superseded` entries, and `adjustmentJobDetails`. Counts stay
 active-only; the superseded section is separate evidence and never enters the
 completion count or pagination.
 
+Ticket-wide impact summaries are display projections, not replacements for the
+requirement-level impact associations returned by the API. Use a shared helper
+to deduplicate by `(kind, value.trim())`, trim the displayed value, and leave
+the source array unchanged. Checklist rows must continue filtering the raw
+impact array by `requirementId` so each requirement retains its own context.
+
 ---
 
 ## Landing Pages (`/`)

@@ -26,6 +26,7 @@ import {
   type TicketCanvas,
 } from '../lib/api.ts';
 import { mergeEvidence, normalizeChatContent } from '../lib/chat-format.ts';
+import { uniqueTicketImpacts } from '../lib/impacts.ts';
 import { cn } from '../lib/utils.ts';
 import { rootRoute } from './__root.tsx';
 
@@ -126,6 +127,7 @@ function TicketCanvasPage() {
   if (!data) return <p className="text-zinc-500">Loading…</p>;
 
   const sourceLabel = ADJUSTMENT_SOURCES.find((item) => item.value === source)?.label ?? source;
+  const uniqueImpacts = uniqueTicketImpacts(data.impacts);
 
   const orderedChecklist = [...data.checklist].sort((a, b) => a.displayOrder - b.displayOrder);
   const totalPages = Math.max(1, Math.ceil(orderedChecklist.length / CHECKLIST_PAGE_SIZE));
@@ -672,12 +674,12 @@ function TicketCanvasPage() {
             <div className="mt-3 rounded border border-zinc-200 bg-white p-3">
               <h4 className="mb-2 text-sm font-semibold">Impacts</h4>
               <ul className="space-y-1 text-sm text-zinc-600">
-                {data.impacts.map((i) => (
+                {uniqueImpacts.map((i) => (
                   <li key={i.id}>
                     <span className="text-zinc-400">{i.kind}:</span> {i.value}
                   </li>
                 ))}
-                {data.impacts.length === 0 && (
+                {uniqueImpacts.length === 0 && (
                   <li className="text-zinc-500">No impacts recorded.</li>
                 )}
               </ul>
@@ -732,8 +734,9 @@ function TicketEvidenceSummary({
   const ordered = [...data.checklist].sort((a, b) => a.displayOrder - b.displayOrder);
   const checked = ordered.filter((item) => item.devStatus === 'checked').length;
   const active = ordered.filter((item) => item.lifecycleStatus === 'active').length;
+  const uniqueImpacts = uniqueTicketImpacts(data.impacts);
   const impacts = { service: 0, api: 0, page: 0 };
-  for (const impact of data.impacts) impacts[impact.kind] += 1;
+  for (const impact of uniqueImpacts) impacts[impact.kind] += 1;
   const metrics = [
     { label: 'Checklist', value: `${checked}/${ordered.length}`, detail: 'checked' },
     {
@@ -744,7 +747,7 @@ function TicketEvidenceSummary({
     { label: 'Review', value: String(pendingCount), detail: 'pending proposals' },
     {
       label: 'Impacts',
-      value: `${data.impacts.length}`,
+      value: `${uniqueImpacts.length}`,
       detail: `${impacts.service} services · ${impacts.api} APIs · ${impacts.page} pages`,
     },
     { label: 'Evidence', value: String(data.timeline.length), detail: 'timeline events' },
