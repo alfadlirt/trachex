@@ -79,6 +79,24 @@ trachex mcp --project loyalty
 
 Starts a stdio MCP server scoped to exactly one project. Configure your coding agent (OpenCode, Claude Code, etc.) to spawn this command. Tools are narrow and project-scoped; `check_item` requires `confirm: true`.
 
+For remote MCP clients, run the explicit Streamable HTTP mode. Set a strong
+secret in the environment; the application does not terminate TLS itself:
+
+```bash
+export TRACHEX_MCP_TOKEN='replace-with-a-secret'
+export TRACHEX_MCP_ALLOWED_HOSTS='mcp.example.com'
+export TRACHEX_MCP_ALLOWED_ORIGINS='https://claude.ai'
+trachex mcp --transport http --project loyalty --host 127.0.0.1 --port 8001
+```
+
+Configure Dokploy to expose `https://mcp.example.com/mcp` and proxy it to the
+listener above. Remote Claude, OpenAI, and supported Business or
+Enterprise/Edu ChatGPT custom MCP apps use that HTTPS URL and send the bearer
+token. A process serves one fixed project; it cannot select another project
+per request. The default bind is `127.0.0.1`; a container may use
+`--host 0.0.0.0` only with an appropriate network policy and the required
+token.
+
 ## Optional Qdrant (derived index)
 
 ```bash

@@ -219,7 +219,13 @@ JSONL streaming is acceptable for the chat route, matching the reference stack. 
 
 ## MCP Contract
 
-`trachex mcp --project <slug>` starts a stdio server scoped to exactly one project. Tools have narrow Zod schemas and return structured JSON plus concise human-readable text where useful.
+`trachex mcp --project <slug>` starts a stdio server scoped to exactly one
+project. Remote clients can use the explicit HTTP mode:
+`trachex mcp --transport http --project <slug> --host 127.0.0.1 --port 8001`.
+It serves Streamable HTTP at `/mcp`, requires `TRACHEX_MCP_TOKEN`, and keeps
+the project fixed for every session in the process. Tools have narrow Zod
+schemas and return structured JSON plus concise human-readable text where
+useful. Dokploy terminates TLS before forwarding to the local listener.
 
 Read tools:
 
@@ -260,6 +266,7 @@ trachex check <key> <requirement-id> --project <slug>
 trachex export <key> --project <slug> --format markdown|json
 trachex dashboard [--project <slug>]
 trachex mcp --project <slug>
+trachex mcp --transport http --project <slug> [--host <host>] [--port <port>]
 trachex infra up|down
 trachex project export <slug> --out <archive>
 ```
@@ -272,7 +279,8 @@ trachex project export <slug> --out <archive>
 - Environment variables may override provider settings for CI.
 - Keychain-backed profiles are used for interactive local operation.
 - Dashboard binds to localhost by default.
-- MCP is stdio by default and explicitly project-scoped.
+- MCP is stdio by default and explicitly project-scoped. HTTP is opt-in,
+  bearer-authenticated, and validates Host/Origin boundaries.
 - Source snapshots may contain proprietary code; logs must avoid raw source and secrets.
 - Export archives exclude provider secrets and embeddings by default.
 
@@ -281,7 +289,8 @@ trachex project export <slug> --out <archive>
 - Domain unit tests for append-only rules, proposal approval, supersession, completion, project scoping, and export determinism.
 - SQLite integration tests for migrations, concurrent CLI/dashboard access, FTS5 retrieval, and archive round trips.
 - Agent contract tests using mocked provider responses and fixed structured outputs.
-- MCP contract tests for schemas, project scoping, confirmation requirements, and serialization.
+- MCP contract tests for schemas, project scoping, confirmation requirements,
+  serialization, and Streamable HTTP session/authentication behavior.
 - API tests for route validation and JSONL events.
 - UI tests for proposal review, checklist completion, responsive drawers, and adjustment flow.
 - Anvia Lens eval cases for extraction, contradiction detection, impact classification, grounding, and abstention.

@@ -1,7 +1,7 @@
 {
   "name": "trachex",
   "version": "0.1.0",
-  "description": "Local-first development traceability layer: CLI, MCP, and bundled dashboard.",
+  "description": "Local-first development traceability layer: CLI, stdio/HTTP MCP, and bundled dashboard.",
   "type": "module",
   "bin": {
     "trachex": "./bin/trachex.mjs"

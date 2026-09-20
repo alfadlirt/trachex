@@ -164,6 +164,20 @@ trachex mcp --project loyalty
 
 Starts a stdio MCP server scoped to exactly one project. Configure your coding agent to spawn this command. Tools are narrow and project-scoped; `check_item` requires `confirm: true` — an agent cannot mark an item complete on its own.
 
+Remote agents can connect through the opt-in Streamable HTTP endpoint. The
+token is required on every request and TLS should terminate at Dokploy:
+
+```bash
+export TRACHEX_MCP_TOKEN='replace-with-a-secret'
+export TRACHEX_MCP_ALLOWED_HOSTS='mcp.example.com'
+trachex mcp --transport http --project loyalty --host 127.0.0.1 --port 8001
+```
+
+Use `https://mcp.example.com/mcp` as the remote MCP URL. Configure
+`TRACHEX_MCP_ALLOWED_ORIGINS` when browser-origin clients are used. Each
+process serves only its startup project; OAuth, multi-project selection, and
+direct certificate handling are not part of this MVP.
+
 ## Optional Qdrant (derived index)
 
 ```bash
@@ -194,7 +208,7 @@ packages/
 ├── domain/           # entities, commands, repository interfaces, invariants
 ├── storage-sqlite/    # SQLite schema, migrations, repositories, FTS5
 ├── agent/            # Anvia agent, prompts, typed tools, retrieval, evals
-├── mcp/              # stdio MCP server and tool schemas
+├── mcp/              # stdio/Streamable HTTP MCP server and tool schemas
 ├── cli/              # command parsing and terminal presentation
 ├── shared/           # schemas, IDs, config, serialization
 └── trachex/          # publishable composition package (bin + bundled dashboard)

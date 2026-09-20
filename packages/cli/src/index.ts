@@ -1,7 +1,7 @@
 import { PipelineError } from '@trachex/agent';
 import { startDashboard } from '@trachex/api';
 import { DomainError } from '@trachex/domain';
-import { runMcpServer } from '@trachex/mcp';
+import { runMcpHttpServer, runMcpServer } from '@trachex/mcp';
 import { loadTrachexEnv, resolveBundledDashboardDist } from '@trachex/shared';
 import { openApp } from './app.ts';
 import { parseCommandArgs } from './args.ts';
@@ -118,7 +118,7 @@ export async function runCli(env: CliEnv): Promise<number> {
       print('status [--project <slug>] [--json]');
       print('subject checklist <subject-id> [list|add|edit|supersede|reorder]');
       print('subject uncheck <subject-id> <requirement-id>');
-      print('dashboard | mcp | infra | eval | tui');
+      print('dashboard | mcp [--transport http] | infra | eval | tui');
       return EXIT_OK;
     }
 
@@ -803,9 +803,30 @@ export async function runCli(env: CliEnv): Promise<number> {
       case 'mcp': {
         const { values } = parseCommandArgs([sub, ...rest].filter(Boolean) as string[], {
           project: { type: 'string' },
+          transport: { type: 'string' },
+          host: { type: 'string' },
+          port: { type: 'string' },
         });
         const project = resolveProject(values);
-        await runMcpServer({ projectSlug: project, appDir: ctx.appDir });
+        const transport = typeof values.transport === 'string' ? values.transport : 'stdio';
+        if (transport !== 'stdio' && transport !== 'http') {
+          throw new CliError('--transport must be stdio or http', EXIT_USAGE, 'USAGE');
+        }
+        if (transport === 'http') {
+          const port = typeof values.port === 'string' ? Number(values.port) : undefined;
+          if (port !== undefined && (!Number.isInteger(port) || port < 1 || port > 65_535)) {
+            throw new CliError('--port must be an integer from 1 to 65535', EXIT_USAGE, 'USAGE');
+          }
+          await runMcpHttpServer({
+            projectSlug: project,
+            appDir: ctx.appDir,
+            ...(typeof values.host === 'string' ? { host: values.host } : {}),
+            ...(port !== undefined ? { port } : {}),
+            env: runtimeEnv,
+          });
+        } else {
+          await runMcpServer({ projectSlug: project, appDir: ctx.appDir });
+        }
         return EXIT_OK;
       }
       case 'dashboard': {

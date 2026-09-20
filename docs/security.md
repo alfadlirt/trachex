@@ -17,6 +17,14 @@ Checklist applied to the codebase (Phases 0-8).
 ## MCP
 
 - [x] MCP is stdio by default and explicitly project-scoped (`trachex mcp --project <slug>`, ADR 005).
+- [x] Opt-in HTTP MCP requires `TRACHEX_MCP_TOKEN` on every request; the token
+  is compared in memory and never logged or returned.
+- [x] HTTP MCP validates the configured Host and Origin allowlists, defaults to
+  `127.0.0.1:8001`, and delegates TLS termination to the Dokploy reverse proxy.
+- [x] HTTP sessions are fixed to the startup project and stored only in
+  process memory. Invalid or restarted sessions must initialize again.
+- [x] OAuth, multi-project selection, direct certificate management, and the
+  deprecated HTTP+SSE transport are not enabled.
 - [x] No generic command-execution tool exposed; `check_item` requires `confirm: true`.
 
 ## Source handling and logs

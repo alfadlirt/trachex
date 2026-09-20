@@ -106,7 +106,11 @@ positional, not a subcommand.
   `CallToolRequestSchema`; `handleToolCall(ctx, name, args)` is the testable
   dispatch function returning the SDK `CallToolResult`.
 - `src/run.ts` — `runMcpServer` uses `StdioServerTransport`; CLI `mcp` command
-  calls it.
+  defaults to it (`--transport stdio`).
+- `src/http.ts` — `runMcpHttpServer` / `startMcpHttpServer` exposes the Streamable HTTP
+  transport at `/mcp` (`--transport http`). Requires `TRACHEX_MCP_TOKEN` bearer auth,
+  binds `127.0.0.1:8001` by default, enforces Host/Origin validation, and creates
+  stateful in-memory sessions per client.
 - `check_item` schema requires `confirm: z.literal(true)`; without it the
   schema rejects (`INVALID_INPUT`).
 - Results: `{ content: [{ type: 'text', text: JSON.stringify(payload) }] }`;
