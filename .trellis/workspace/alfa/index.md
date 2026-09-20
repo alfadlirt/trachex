@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 4
-- **Last Active**: 2026-09-11
+- **Total Sessions**: 5
+- **Last Active**: 2026-09-20
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~104 | Active |
+| `journal-1.md` | ~126 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 5 | 2026-09-20 | Enforce English output in agent prompts and evals | `ca8ba23` | `main` |
 | 4 | 2026-09-11 | Persistent TUI Workspace UX | `33c3f54`, `9bcf71c` | `main` |
 | 3 | 2026-09-11 | Subject-centered checklist workspace redesign | `ab8bddc`, `959eff0` | `main` |
 | 2 | 2026-09-10 | Intro + harness check | - | `main` |

@@ -102,3 +102,25 @@ Implemented and verified the persistent Trachex TUI lifecycle: ASCII banner load
 ### Status
 
 [OK] **Completed**
+
+
+## Session 5: Enforce English output in agent prompts and evals
+<!-- trellis-session: v=2 fp=9039b8322aea3a60 -->
+
+**Date**: 2026-09-20
+**Task**: Enforce English output in agent prompts and evals
+**Branch**: `main`
+
+### Summary
+
+Added explicit English-only output system instructions to extraction and reconciliation prompts. Implemented englishLanguage eval metric and multilingual corpus fixtures to verify non-English sources yield English requirements proposals.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ca8ba23` | feat(agent): enforce english output in agent prompts and evals |
+
+### Status
+
+[OK] **Completed**
