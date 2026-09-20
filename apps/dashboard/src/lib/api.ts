@@ -19,10 +19,15 @@ export interface Requirement {
   ticketId: string;
   title: string;
   description: string | null;
+  sourceId: string | null;
   sourceLocation: string | null;
   lifecycleStatus: 'active' | 'superseded';
   devStatus: 'unchecked' | 'checked';
   parentLabel: string | null;
+  parentId: string | null;
+  displayOrder: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Proposal {
@@ -35,10 +40,62 @@ export interface AdjustmentJob {
   id: string;
   status: 'queued' | 'processing' | 'completed' | 'failed';
   sourceType: string;
+  attribution: string | null;
   sourceLocation: string | null;
   createdAt: string;
+  updatedAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  attempts: number;
   error: string | null;
   proposalId: string | null;
+  fileName: string | null;
+  fileKind: string | null;
+}
+
+export interface AdjustmentJobDetail {
+  job: AdjustmentJob;
+  source: {
+    id: string;
+    type: string;
+    attribution: string | null;
+    location: string | null;
+    note: string | null;
+    sourceEventAt: string | null;
+    ingestedAt: string;
+  } | null;
+}
+
+export interface SupersededEntry {
+  item: SupersededItem;
+  supersededById: string | null;
+  supersededByTitle: string | null;
+  replacement: SupersededItem | null;
+  oldAudits: Array<{ id: string; action: string; actorType: string; checkedAt: string }>;
+}
+
+export interface SupersededItem {
+  id: string;
+  title: string;
+  description: string | null;
+  devStatus: string;
+  lifecycleStatus: string;
+  source: {
+    type: string;
+    attribution: string | null;
+    location: string | null;
+    note: string | null;
+    sourceEventAt: string | null;
+    ingestedAt: string;
+  } | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProposedOrderView {
+  orderedIds: string[];
+  rationale: string;
+  uncertainty: string | null;
 }
 
 export interface ProposalReviewDraft {
@@ -68,6 +125,8 @@ export interface ProposalReview {
   isEdited: boolean;
   version: number;
   supersessionTargets: { id: string; title: string; status: string }[];
+  proposedOrder: ProposedOrderView | null;
+  orderState: 'none' | 'valid' | 'stale';
   error: string | null;
 }
 
@@ -100,7 +159,9 @@ export interface TicketCanvas {
   impacts: Impact[];
   scenarios: Scenario[];
   timeline: TimelineEvent[];
+  superseded: SupersededEntry[];
   adjustmentJobs: AdjustmentJob[];
+  adjustmentJobDetails: AdjustmentJobDetail[];
 }
 
 export interface ChatMessage {
@@ -139,8 +200,41 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(input),
     }),
+  updateProject: (projectId: string, input: { name?: string; slug?: string }) =>
+    request<{ project: Project }>(`/api/projects/${projectId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    }),
+  deleteProject: (projectId: string, confirmName: string) =>
+    request<{ projectId: string; status: string }>(`/api/projects/${projectId}`, {
+      method: 'DELETE',
+      body: JSON.stringify({ confirmName }),
+    }),
   listTickets: (projectId: string) =>
     request<{ project: Project; tickets: Ticket[] }>(`/api/projects/${projectId}/tickets`),
+  createTicket: (projectId: string, input: { key: string; title: string }) =>
+    request<{ ticket: Ticket }>(`/api/projects/${projectId}/tickets`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+  updateTicket: (projectId: string, ticketKey: string, input: { title?: string; key?: string }) =>
+    request<{ ticket: Ticket }>(`/api/projects/${projectId}/tickets/${ticketKey}`, {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    }),
+  deleteTicket: (projectId: string, ticketKey: string, confirmName: string) =>
+    request<{ ticketId: string; status: string }>(
+      `/api/projects/${projectId}/tickets/${ticketKey}`,
+      {
+        method: 'DELETE',
+        body: JSON.stringify({ confirmName }),
+      },
+    ),
+  reorderChecklist: (projectId: string, ticketKey: string, orderedIds: string[]) =>
+    request<{ ticketId: string; checklist: Requirement[] }>(
+      `/api/projects/${projectId}/tickets/${ticketKey}/checklist/reorder`,
+      { method: 'POST', body: JSON.stringify({ orderedIds }) },
+    ),
   getCanvas: (projectId: string, ticketKey: string) =>
     request<TicketCanvas>(`/api/projects/${projectId}/tickets/${ticketKey}`),
   getChatHistory: (projectId: string, ticketKey: string) =>
@@ -220,4 +314,5 @@ export interface ProposalReviewOutput {
   kind: 'extraction' | 'reconciliation';
   requirements?: ProposalReviewDraft[];
   create?: ProposalReviewDraft[];
+  proposedOrder?: { orderedIds: string[]; rationale: string; uncertainty?: string | null } | null;
 }
