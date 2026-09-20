@@ -109,8 +109,10 @@ export interface ChatSession {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers = new Headers(init?.headers);
+  if (typeof init?.body === 'string') headers.set('Content-Type', 'application/json');
   const res = await fetch(path, {
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     ...init,
   });
   if (!res.ok) {
@@ -147,6 +149,21 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(input),
     }),
+  addAdjustmentUpload: (
+    projectId: string,
+    ticketKey: string,
+    input: { source: string; attribution?: string; note?: string; file?: File },
+  ) => {
+    const form = new FormData();
+    form.set('source', input.source);
+    if (input.attribution) form.set('attribution', input.attribution);
+    if (input.note) form.set('note', input.note);
+    if (input.file) form.set('file', input.file);
+    return request<{ proposal: Proposal }>(
+      `/api/projects/${projectId}/tickets/${ticketKey}/adjustments`,
+      { method: 'POST', body: form },
+    );
+  },
   approveProposal: (proposalId: string) =>
     request<{ status: string }>(`/api/proposals/${proposalId}/approve`, { method: 'POST' }),
   rejectProposal: (proposalId: string) =>

@@ -22,7 +22,7 @@ export function createSearchTool(search: SearchRepository) {
   return createTool({
     name: 'search_context',
     description:
-      'Search ingested project context (sources, notes, documents) and return chunk text with provenance.',
+      'Search ingested project context (sources, notes, documents) using verified lexical retrieval and return chunk text with provenance. Semantic vector retrieval is not enabled yet.',
     inputSchema: z.object({
       query: z.string().min(1),
       projectId: z.string().min(1),

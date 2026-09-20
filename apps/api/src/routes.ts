@@ -17,6 +17,7 @@ import {
 import { Hono } from 'hono';
 import type { ApiContext } from './context.ts';
 import { errorPayload, statusForError } from './errors.ts';
+import { UploadError, validateAndReadUpload } from './uploads.ts';
 import {
   adjustmentSchema,
   checkSchema,
@@ -126,7 +127,37 @@ export function createRoutes(deps: RouteDeps): Hono {
       if (!ticket) {
         return c.json(errorPayload(new NotFoundError('ticket', c.req.param('ticketKey'))), 404);
       }
-      const body = adjustmentSchema.parse(await c.req.json());
+      const isMultipart = c.req.header('content-type')?.includes('multipart/form-data') ?? false;
+      let body: {
+        source: 'fsd' | 'brd' | 'chat' | 'meeting' | 'clarification' | 'uat' | 'manual' | 'context';
+        attribution?: string | undefined;
+        note?: string | undefined;
+        file?: File | undefined;
+      };
+      if (isMultipart) {
+        const form = await c.req.formData();
+        const source = form.get('source');
+        const file = form.get('file');
+        if (typeof source !== 'string') throw new UploadError('Choose a source type.');
+        body = { source: adjustmentSchema.shape.source.parse(source) };
+        const attribution = form.get('attribution');
+        const note = form.get('note');
+        if (typeof attribution === 'string' && attribution.trim())
+          body.attribution = attribution.trim();
+        if (typeof note === 'string' && note.trim()) body.note = note.trim();
+        if (file instanceof File && file.size > 0) body.file = file;
+        if (!body.note && !body.file)
+          throw new UploadError('Add a note or attach a Markdown/PDF file.');
+      } else body = adjustmentSchema.parse(await c.req.json());
+      let content = body.note ?? '';
+      let relPath = 'note';
+      let contentKind = 'text';
+      if (body.file) {
+        const upload = await validateAndReadUpload(body.file, ctx.appDir);
+        content = [content, upload.content].filter(Boolean).join('\n\n');
+        relPath = upload.displayName.replace(/[^a-zA-Z0-9._-]/g, '_');
+        contentKind = upload.extension === '.pdf' ? 'pdf-text' : 'markdown';
+      }
       const result = await runReconciliation(
         ctx.uow,
         { runAgent },
@@ -136,9 +167,10 @@ export function createRoutes(deps: RouteDeps): Hono {
           ticketId: ticket.id,
           type: body.source,
           ...(body.attribution !== undefined ? { attribution: body.attribution } : {}),
-          relPath: 'note',
-          contentKind: 'text',
-          content: body.note,
+          relPath,
+          contentKind,
+          content,
+          ...(body.file ? { location: relPath } : {}),
         },
       );
       return c.json(

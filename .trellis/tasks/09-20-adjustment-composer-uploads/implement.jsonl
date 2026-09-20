@@ -1,0 +1,4 @@
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Backend quality, layer boundaries, and test requirements for upload/API work."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Validation and failure propagation conventions for malformed uploads and agent failures."}
+{"file":".trellis/spec/frontend/directory-structure.md","reason":"Dashboard route ownership, UI conventions, and existing chat/summary patterns."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Multipart request through storage, extraction, ingestion, and dashboard data flow."}

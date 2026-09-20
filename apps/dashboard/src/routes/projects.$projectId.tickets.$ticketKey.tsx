@@ -26,6 +26,9 @@ function TicketCanvasPage() {
   const [note, setNote] = useState('');
   const [source, setSource] = useState('chat');
   const [attribution, setAttribution] = useState('');
+  const [file, setFile] = useState<File | undefined>();
+  const [adjustmentState, setAdjustmentState] = useState<'idle' | 'submitting' | 'success'>('idle');
+  const [adjustmentError, setAdjustmentError] = useState<string | null>(null);
   const [dirtyProposals, setDirtyProposals] = useState<Set<string>>(new Set());
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
 
@@ -84,15 +87,28 @@ function TicketCanvasPage() {
   const refreshAfterProposal = () => load();
 
   const submitAdjustment = async () => {
-    if (!note.trim()) return;
-    await api.addAdjustment(projectId, ticketKey, {
-      source,
-      ...(attribution ? { attribution } : {}),
-      note,
-    });
-    setNote('');
-    setAttribution('');
-    load();
+    if (!note.trim() && !file) {
+      setAdjustmentError('Add a note or choose a Markdown/PDF file.');
+      return;
+    }
+    setAdjustmentState('submitting');
+    setAdjustmentError(null);
+    try {
+      await api.addAdjustmentUpload(projectId, ticketKey, {
+        source,
+        ...(attribution ? { attribution } : {}),
+        ...(note ? { note } : {}),
+        ...(file ? { file } : {}),
+      });
+      setNote('');
+      setAttribution('');
+      setFile(undefined);
+      setAdjustmentState('success');
+      load();
+    } catch (e) {
+      setAdjustmentState('idle');
+      setAdjustmentError(e instanceof Error ? e.message : 'The adjustment could not be submitted.');
+    }
   };
 
   const download = async (format: 'markdown' | 'json') => {
@@ -313,42 +329,96 @@ function TicketCanvasPage() {
             </div>
           )}
 
-          <div className="mt-6 rounded border border-zinc-200 bg-white p-3">
-            <h3 className="mb-2 font-semibold">Add Adjustment</h3>
-            <div className="mb-2 flex gap-2">
-              <select
-                className="rounded border border-zinc-300 px-2 py-1 text-sm"
-                value={source}
-                onChange={(e) => setSource(e.target.value)}
-              >
-                {['fsd', 'brd', 'chat', 'meeting', 'clarification', 'uat', 'manual', 'context'].map(
-                  (s) => (
+          <div className="mt-6 rounded-xl border border-zinc-200 bg-white p-4">
+            <h3 className="font-semibold">Add adjustment</h3>
+            <p className="mt-1 text-sm text-zinc-500">
+              Add local evidence for reconciliation. It creates a proposal for review, never a
+              direct checklist change.
+            </p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <label className="text-sm font-medium">
+                Source type
+                <select
+                  className="mt-1 block w-full rounded border border-zinc-300 px-2 py-2 text-sm"
+                  value={source}
+                  onChange={(e) => setSource(e.target.value)}
+                >
+                  {[
+                    'fsd',
+                    'brd',
+                    'chat',
+                    'meeting',
+                    'clarification',
+                    'uat',
+                    'manual',
+                    'context',
+                  ].map((s) => (
                     <option key={s} value={s}>
                       {s}
                     </option>
-                  ),
-                )}
-              </select>
-              <input
-                className="rounded border border-zinc-300 px-2 py-1 text-sm"
-                placeholder="attribution"
-                value={attribution}
-                onChange={(e) => setAttribution(e.target.value)}
-              />
+                  ))}
+                </select>
+              </label>
+              <label className="text-sm font-medium">
+                Attribution <span className="font-normal text-zinc-500">(optional)</span>
+                <input
+                  className="mt-1 block w-full rounded border border-zinc-300 px-2 py-2 text-sm"
+                  placeholder="Who supplied this?"
+                  value={attribution}
+                  onChange={(e) => setAttribution(e.target.value)}
+                />
+              </label>
             </div>
-            <textarea
-              className="w-full rounded border border-zinc-300 px-2 py-1 text-sm"
-              rows={3}
-              placeholder="Note (e.g. discount cap should be 15%, not 20%)"
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-            />
+            <label className="mt-3 block text-sm font-medium">
+              Note{' '}
+              <span className="font-normal text-zinc-500">(optional when a file is attached)</span>
+              <textarea
+                className="mt-1 w-full rounded border border-zinc-300 px-2 py-2 text-sm"
+                rows={3}
+                placeholder="Note (e.g. discount cap should be 15%, not 20%)"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+              />
+            </label>
+            <label className="mt-3 block text-sm font-medium">
+              Source document
+              <input
+                className="mt-1 block w-full rounded border border-dashed border-zinc-300 p-2 text-sm"
+                type="file"
+                accept=".md,.markdown,.pdf,application/pdf,text/markdown"
+                onChange={(e) => setFile(e.target.files?.[0])}
+              />
+            </label>
+            {file && (
+              <div className="mt-2 flex items-center justify-between rounded bg-zinc-50 px-3 py-2 text-sm">
+                <span>
+                  {file.name} · {file.type || 'type not supplied'} · {(file.size / 1024).toFixed(1)}{' '}
+                  KB
+                </span>
+                <button
+                  type="button"
+                  className="text-red-700 underline"
+                  onClick={() => setFile(undefined)}
+                >
+                  Remove
+                </button>
+              </div>
+            )}
+            {adjustmentError && (
+              <p className="mt-2 text-sm text-red-700" role="alert">
+                {adjustmentError}
+              </p>
+            )}
+            {adjustmentState === 'success' && (
+              <p className="mt-2 text-sm text-emerald-700">Submitted for review.</p>
+            )}
             <button
               type="button"
               className="mt-2 rounded bg-zinc-900 px-3 py-1.5 text-sm text-white hover:bg-zinc-700"
               onClick={submitAdjustment}
+              disabled={adjustmentState === 'submitting'}
             >
-              Submit for reconciliation
+              {adjustmentState === 'submitting' ? 'Processing…' : 'Submit for reconciliation'}
             </button>
           </div>
         </div>

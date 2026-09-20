@@ -1,0 +1,4 @@
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Review upload validation, storage boundaries, and regression coverage."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Review malformed file and extraction failure behavior."}
+{"file":".trellis/spec/frontend/directory-structure.md","reason":"Review composer accessibility, responsive behavior, and route scope."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Check multipart/API/storage/extraction data flow and compatibility with JSON adjustments."}

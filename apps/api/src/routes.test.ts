@@ -103,6 +103,53 @@ test('POST adjustments creates a pending proposal', async () => {
   }
 });
 
+test('POST multipart adjustment ingests a Markdown upload', async () => {
+  const { appDir, ctx, project, ticket, app } = await setup();
+  try {
+    const form = new FormData();
+    form.set('source', 'clarification');
+    form.set('attribution', 'Budi');
+    form.set(
+      'file',
+      new File(['The cap is 15 percent.'], 'clarification.md', { type: 'text/markdown' }),
+    );
+    const res = await app.request(`/api/projects/${project.id}/tickets/${ticket.key}/adjustments`, {
+      method: 'POST',
+      body: form,
+    });
+    assert.equal(res.status, 201);
+    const body = (await res.json()) as {
+      proposal: { status: string };
+      source: { location: string | null };
+    };
+    assert.equal(body.proposal.status, 'pending');
+    assert.equal(body.source.location, 'clarification.md');
+  } finally {
+    ctx.db.close();
+    rmSync(appDir, { recursive: true, force: true });
+  }
+});
+
+test('POST multipart adjustment rejects unsupported files without creating a proposal', async () => {
+  const { appDir, ctx, project, ticket, app } = await setup();
+  try {
+    const form = new FormData();
+    form.set('source', 'manual');
+    form.set('file', new File(['not supported'], 'notes.txt', { type: 'text/plain' }));
+    const res = await app.request(`/api/projects/${project.id}/tickets/${ticket.key}/adjustments`, {
+      method: 'POST',
+      body: form,
+    });
+    assert.equal(res.status, 400);
+    const body = (await res.json()) as { error: { code: string } };
+    assert.equal(body.error.code, 'INVALID_UPLOAD');
+    assert.equal((await ctx.uow.proposals.listByTicket(ticket.id)).length, 0);
+  } finally {
+    ctx.db.close();
+    rmSync(appDir, { recursive: true, force: true });
+  }
+});
+
 test('POST requirements/check requires confirm:true', async () => {
   const { appDir, ctx, app } = await setup();
   try {
