@@ -2,6 +2,7 @@ import type {
   CompletionAudit,
   Impact,
   ImpactKind,
+  Project,
   Proposal,
   ProposalVersion,
   Requirement,
@@ -454,10 +455,7 @@ export interface TimelineEvent {
   action?: 'check' | 'uncheck';
 }
 
-export async function createProject(
-  uow: UnitOfWork,
-  input: CreateProjectInput,
-): Promise<{ id: string; slug: string }> {
+export async function createProject(uow: UnitOfWork, input: CreateProjectInput): Promise<Project> {
   const slug = input.slug.trim().toLowerCase();
   if (slug.length === 0) {
     throw new InvalidOperationError('project slug must not be empty');
@@ -476,7 +474,7 @@ export async function createProject(
     updatedAt: now,
   };
   await uow.projects.create(project);
-  return { id: project.id, slug: project.slug };
+  return project;
 }
 
 export async function registerRepository(

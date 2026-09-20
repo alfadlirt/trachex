@@ -55,6 +55,24 @@ test('POST /api/projects creates a project and rejects duplicate slug', async ()
       body: JSON.stringify({ slug: 'newproj', name: 'New' }),
     });
     assert.equal(res.status, 201);
+    const body = (await res.json()) as {
+      project: {
+        id: string;
+        slug: string;
+        name: string;
+        description: string | null;
+        createdAt: string;
+        updatedAt: string;
+      };
+    };
+    assert.deepEqual(body.project, {
+      id: body.project.id,
+      slug: 'newproj',
+      name: 'New',
+      description: null,
+      createdAt: body.project.createdAt,
+      updatedAt: body.project.updatedAt,
+    });
     const dup = await app.request('/api/projects', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
