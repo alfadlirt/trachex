@@ -15,7 +15,12 @@ export interface QdrantConfig {
 
 export interface QdrantClient {
   upsert(points: QdrantPoint[]): Promise<void>;
-  search(query: number[], projectId: string, limit: number): Promise<SearchResult[]>;
+  search(
+    query: number[],
+    projectId: string,
+    limit: number,
+    subjectId?: string,
+  ): Promise<SearchResult[]>;
   deleteCollection(): Promise<void>;
 }
 
@@ -47,29 +52,56 @@ export function createQdrantClient(config: QdrantConfig): QdrantClient {
         body: JSON.stringify({ points }),
       });
     },
-    async search(query, projectId, limit) {
+    async search(query, projectId, limit, subjectId) {
       await ensureCollection();
-      const response = await request(`${collectionUrl}/points/query`, {
-        method: 'POST',
-        body: JSON.stringify({
-          query,
-          limit,
-          with_payload: true,
-          filter: { must: [{ key: 'project_id', match: { value: projectId } }] },
-        }),
-      });
-      const body = (await response.json()) as {
-        result?: Array<{ score: number; payload: QdrantPoint['payload'] }>;
+      const searchPoints = async (requestedLimit: number, filter: QdrantFilter) => {
+        const response = await request(`${collectionUrl}/points/query`, {
+          method: 'POST',
+          body: JSON.stringify({
+            query,
+            limit: requestedLimit,
+            with_payload: true,
+            filter,
+          }),
+        });
+        const body = (await response.json()) as {
+          result?: Array<{ score: number; payload: QdrantPoint['payload'] }>;
+        };
+        return body.result ?? [];
       };
-      return (body.result ?? []).map((item) => ({
-        chunkId: item.payload.chunk_id,
-        snapshotId: item.payload.snapshot_id,
-        projectId: item.payload.project_id,
-        content: item.payload.content,
-        location: item.payload.location,
-        relPath: item.payload.rel_path,
-        score: item.score,
-      }));
+      const projectFilter: QdrantFilter = {
+        must: [{ key: 'project_id', match: { value: projectId } }],
+      };
+      if (!subjectId) {
+        return (await searchPoints(limit, projectFilter)).map(toSearchResult);
+      }
+
+      const subjectResults = await searchPoints(limit, {
+        must: [...projectFilter.must, { key: 'subject_ids', match: { value: subjectId } }],
+      });
+      if (subjectResults.length >= limit) {
+        return subjectResults.slice(0, limit).map(toSearchResult);
+      }
+
+      // Query more than the requested page so unrelated subject evidence does not
+      // hide project-only or legacy points in the fallback set.
+      const projectResults = await searchPoints(Math.max(limit * 10, 100), projectFilter);
+      const merged = [...subjectResults, ...projectResults];
+      const seen = new Set<string>();
+      return merged
+        .filter(
+          (item) =>
+            subjectResults.includes(item) ||
+            !item.payload.subject_ids ||
+            item.payload.subject_ids.length === 0,
+        )
+        .filter((item) => {
+          if (seen.has(item.payload.chunk_id)) return false;
+          seen.add(item.payload.chunk_id);
+          return true;
+        })
+        .slice(0, limit)
+        .map(toSearchResult);
     },
     async deleteCollection() {
       await request(collectionUrl, { method: 'DELETE' });
@@ -105,6 +137,7 @@ export function createQdrantVectorRepository(input: {
               vector: vector.vector,
               payload: {
                 project_id: String(row.project_id),
+                subject_ids: subjectIdsForSnapshot(db, snapshotId),
                 snapshot_id: snapshotId,
                 chunk_id: String(row.id),
                 chunk_index: Number(row.chunk_index),
@@ -117,10 +150,10 @@ export function createQdrantVectorRepository(input: {
         }),
       );
     },
-    async search(query, projectId, limit = 10) {
+    async search(query, projectId, limit = 10, subjectId) {
       const [embedding] = await embedder.embedTexts([query]);
       if (!embedding) return [];
-      return client.search(embedding.vector, projectId, limit);
+      return client.search(embedding.vector, projectId, limit, subjectId);
     },
   };
 }
@@ -138,6 +171,7 @@ export interface QdrantPoint {
   vector: number[];
   payload: {
     project_id: string;
+    subject_ids?: string[];
     snapshot_id: string;
     chunk_id: string;
     chunk_index: number;
@@ -156,9 +190,9 @@ export function createQdrantSearchRepository(
   embedder: VectorEmbedder,
 ): SearchRepository {
   return {
-    async search(query, projectId, limit = 10): Promise<SearchResult[]> {
+    async search(query, projectId, limit = 10, subjectId): Promise<SearchResult[]> {
       const [embedding] = await embedder.embedTexts([query]);
-      return embedding ? client.search(embedding.vector, projectId, limit) : [];
+      return embedding ? client.search(embedding.vector, projectId, limit, subjectId) : [];
     },
   };
 }
@@ -168,6 +202,7 @@ export interface SnapshotForRebuild {
   projectId: string;
   relPath: string;
   content: string;
+  subjectIds?: string[];
 }
 
 export async function rebuildQdrantFromSnapshots(input: {
@@ -192,6 +227,7 @@ export async function rebuildQdrantFromSnapshots(input: {
         vector,
         payload: {
           project_id: snapshot.projectId,
+          subject_ids: snapshot.subjectIds ?? [],
           snapshot_id: snapshot.id,
           chunk_id: chunk.id,
           chunk_index: chunk.index,
@@ -204,4 +240,31 @@ export async function rebuildQdrantFromSnapshots(input: {
   }
   await client.upsert(points);
   return points.length;
+}
+
+interface QdrantFilter {
+  must: Array<{ key: string; match: { value: string } }>;
+}
+
+function toSearchResult(item: { score: number; payload: QdrantPoint['payload'] }): SearchResult {
+  return {
+    chunkId: item.payload.chunk_id,
+    snapshotId: item.payload.snapshot_id,
+    projectId: item.payload.project_id,
+    content: item.payload.content,
+    location: item.payload.location,
+    relPath: item.payload.rel_path,
+    score: item.score,
+  };
+}
+
+function subjectIdsForSnapshot(db: Database.Database, snapshotId: string): string[] {
+  const rows = db
+    .prepare(
+      `SELECT DISTINCT src.ticket_id
+       FROM sources src JOIN subjects subj ON subj.id = src.ticket_id
+       WHERE src.snapshot_id = ?`,
+    )
+    .all(snapshotId) as Array<{ ticket_id: unknown }>;
+  return rows.map((row) => String(row.ticket_id));
 }

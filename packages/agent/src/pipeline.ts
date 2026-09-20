@@ -37,6 +37,7 @@ export interface PipelineInput {
   note?: string;
   currentRequirements?: string;
   sourceId?: string;
+  subjectId?: string;
 }
 
 export async function runExtraction(uow: UnitOfWork, deps: PipelineDeps, input: PipelineInput) {
@@ -64,6 +65,7 @@ export async function runExtraction(uow: UnitOfWork, deps: PipelineDeps, input: 
         ? `${input.currentRequirements}\n\nAdjustment source:\n${input.content}`
         : input.content,
       projectId: input.projectId,
+      ...(input.subjectId !== undefined ? { subjectId: input.subjectId } : {}),
       outputSchema: extractionOutputSchema,
     });
     const proposal = await createProposal(uow, {
@@ -109,6 +111,7 @@ export async function runReconciliation(uow: UnitOfWork, deps: PipelineDeps, inp
         ? `${input.currentRequirements}\n\nAdjustment source:\n${input.content}`
         : input.content,
       projectId: input.projectId,
+      ...(input.subjectId !== undefined ? { subjectId: input.subjectId } : {}),
       outputSchema: reconciliationOutputSchema,
     });
     const proposal = await createProposal(uow, {

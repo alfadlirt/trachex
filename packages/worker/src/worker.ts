@@ -41,7 +41,7 @@ const runAgent: RunAgentFn = async (args) => {
     args.outputSchema,
   );
   const retrievalPrompt = args.projectId
-    ? `\n\nBefore producing the proposal, call vectorSearch with query summarizing the adjustment and projectId "${args.projectId}". Use the returned indexed evidence when reconciling; do not invent a different projectId.`
+    ? `\n\nBefore producing the proposal, call vectorSearch with query summarizing the adjustment, projectId "${args.projectId}"${args.subjectId ? `, and subjectId "${args.subjectId}"` : ''}. Use the returned indexed evidence when reconciling; do not invent a different projectId or subjectId.`
     : '';
   return retryTransientAgentCall(() =>
     runAgentWithSchema(agent, { prompt: `${args.userContent ?? ''}${retrievalPrompt}` }),
@@ -68,6 +68,7 @@ createAdjustmentWorker(redisUrl, async (job) => {
       ? readFileSync(`${sourcesDir(appDir, record.projectId)}/${source.snapshotId}`, 'utf8')
       : (source.note ?? '');
     const currentRequirements = await uow.requirements.listActiveByTicket(record.ticketId);
+    const subject = await uow.subjects.findById(record.ticketId);
     const result = await runReconciliation(
       uow,
       { runAgent },
@@ -81,6 +82,7 @@ createAdjustmentWorker(redisUrl, async (job) => {
         content,
         currentRequirements: JSON.stringify(currentRequirements, null, 2),
         sourceId: source.id,
+        ...(subject ? { subjectId: subject.id } : {}),
         ...(source.attribution ? { attribution: source.attribution } : {}),
       },
     );

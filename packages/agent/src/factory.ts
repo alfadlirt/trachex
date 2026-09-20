@@ -16,6 +16,7 @@ export type RunAgentFn = (input: {
   instructions: string;
   userContent: string;
   projectId?: string;
+  subjectId?: string;
   outputSchema: z.ZodSchema<unknown>;
 }) => Promise<unknown>;
 
@@ -28,9 +29,10 @@ export function createSearchTool(search: SearchRepository) {
       query: z.string().min(1),
       projectId: z.string().min(1),
       limit: z.number().int().min(1).max(20).optional(),
+      subjectId: z.string().min(1).optional(),
     }),
     execute: async (input): Promise<SearchResult[]> => {
-      return search.search(input.query, input.projectId, input.limit ?? 10);
+      return search.search(input.query, input.projectId, input.limit ?? 10, input.subjectId);
     },
   });
 }

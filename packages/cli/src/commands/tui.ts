@@ -16,10 +16,10 @@ import {
   editRequirementContent,
   permanentlyDeleteProject,
   permanentlyDeleteSubject,
+  rejectProposal,
   reorderChecklist,
   supersedeRequirement,
   uncheckRequirement,
-  rejectProposal,
 } from '@trachex/domain';
 import { buildRunAgent } from '../agent-wiring.ts';
 import type { AppContext } from '../app.ts';
@@ -310,6 +310,7 @@ async function intakeEvidence(
   ticketId: string,
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<void> {
+  const subject = await ctx.uow.subjects.findById(ticketId);
   const mode = valueOrCancel(
     result(
       await select({
@@ -398,6 +399,7 @@ async function intakeEvidence(
         appDir: ctx.appDir,
         projectId,
         ticketId,
+        ...(subject ? { subjectId: subject.id } : {}),
         type: 'manual',
         attribution,
         relPath,

@@ -40,6 +40,7 @@ export async function adjustment(
       appDir: ctx.appDir,
       projectId: subject.projectId,
       ticketId: ticket.id,
+      subjectId: subject.id,
       type: args.source as SourceType,
       ...(args.from !== undefined ? { attribution: args.from } : {}),
       note: args.note,

@@ -113,6 +113,7 @@ export async function ticketAddDocument(
   if (!project) throw new NotFoundError('project', args.project);
   const ticket = await ctx.uow.tickets.findByProjectAndKey(project.id, args.key);
   if (!ticket) throw new NotFoundError('ticket', args.key);
+  const subject = await ctx.uow.subjects.findById(ticket.id);
 
   const runAgent = buildRunAgent({
     search: ctx.uow.search,
@@ -125,6 +126,7 @@ export async function ticketAddDocument(
       appDir: ctx.appDir,
       projectId: project.id,
       ticketId: ticket.id,
+      ...(subject ? { subjectId: subject.id } : {}),
       type: 'document',
       relPath: args.document,
       contentKind: 'markdown',
@@ -160,6 +162,7 @@ export async function subjectAddDocument(
       appDir: ctx.appDir,
       projectId: subject.projectId,
       ticketId: ticket.id,
+      subjectId: subject.id,
       type: 'document',
       relPath: args.document,
       contentKind: 'markdown',

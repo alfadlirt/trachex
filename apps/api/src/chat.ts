@@ -77,6 +77,7 @@ export function createChatRoutes(deps: ChatDeps): Hono {
     const ticket = await ctx.uow.tickets.findByProjectAndKey(project.id, c.req.param('ticketKey'));
     if (!ticket)
       return c.json(errorPayload(new NotFoundError('ticket', c.req.param('ticketKey'))), 404);
+    const subject = await ctx.uow.subjects.findById(ticket.id);
     const body = (await c.req.json().catch(() => ({}))) as { message?: string };
     const message = body.message?.trim() ?? '';
     const requestedSessionId = (body as { sessionId?: string }).sessionId;
@@ -119,6 +120,8 @@ export function createChatRoutes(deps: ChatDeps): Hono {
               'Return a concise answer and optional evidence references.',
             ].join('\n'),
             userContent: `Ticket baseline:\n${JSON.stringify(summary, null, 2)}\n\nRecent conversation:\n${JSON.stringify(history.slice(-12), null, 2)}\n\nUser question:\n${message}`,
+            projectId: project.id,
+            ...(subject ? { subjectId: subject.id } : {}),
             outputSchema: answerSchema,
           });
           const answer = answerSchema.parse(output);

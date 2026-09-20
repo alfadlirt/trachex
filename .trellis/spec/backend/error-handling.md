@@ -170,3 +170,34 @@ loadTransformersEmbeddingModel({
   modelId: module.DEFAULT_TRANSFORMERS_EMBEDDING_MODEL,
 });
 ```
+
+## Subject-Aware Retrieval
+
+### Contract
+
+- `SearchRepository.search(query, projectId, limit?, subjectId?)` always scopes
+  to `projectId`; `subjectId` is optional.
+- Indexed Qdrant payloads include `subject_ids: string[]`. The array contains
+  every subject/ticket that references the snapshot; legacy project-only
+  snapshots use an empty array.
+- Subject-scoped retrieval ranks matching subject snapshots first and may add
+  project-only evidence when the subject result set does not fill the limit.
+- Calls without `subjectId` remain project-scoped and can retrieve all project
+  evidence.
+
+### Error Matrix
+
+| Condition | Result |
+| --- | --- |
+| Subject-scoped Qdrant search | Project filter plus `subject_ids` membership filter |
+| Subject-scoped SQLite search | Matching subject snapshots first; project-only snapshots as fallback |
+| Missing subject context | Project-wide search within the required project |
+| Existing Qdrant payload without `subject_ids` | Project-searchable; excluded from subject-specific matches until rebuilt |
+
+### Tests Required
+
+- Assert reused snapshots include every linked subject ID in Qdrant payloads.
+- Assert subject search excludes unrelated subject evidence and preserves
+  project-only fallback evidence.
+- Assert agent, API chat, CLI, MCP, and worker retrieval paths pass the current
+  subject ID when available.

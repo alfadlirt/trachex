@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { createProject, createTicket } from '@trachex/domain';
+import { createProject, createSubject, createTicket } from '@trachex/domain';
 import type Database from 'better-sqlite3';
 import { ingestFile, migrate, openDatabase, SqliteUnitOfWork } from './index.ts';
 import type { QdrantPoint } from './qdrant.ts';
@@ -143,6 +143,94 @@ test('qdrant backend indexes an ingested upload through the owning unit of work'
     assert.ok(point);
     assert.equal(point.payload.snapshot_id, result.snapshot.id);
     assert.equal(point.payload.rel_path, 'upload.md');
+    db.close();
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('qdrant payloads include every subject linked to a reused snapshot', async () => {
+  const dir = tempDir();
+  try {
+    const db = openDb(dir);
+    const points: QdrantPoint[] = [];
+    const embedder = {
+      async embedTexts(texts: string[]) {
+        return texts.map(() => ({ vector: Array.from({ length: 384 }, () => 1) }));
+      },
+    };
+    const qdrantClient = {
+      async upsert(batch: QdrantPoint[]) {
+        points.push(...batch);
+      },
+      async search() {
+        return [];
+      },
+      async deleteCollection() {},
+    };
+    const uow = new SqliteUnitOfWork(db, {
+      embedder,
+      vectorBackend: 'qdrant',
+      qdrantClient,
+    });
+    const project = await createProject(uow, { slug: 'shared', name: 'Shared' });
+    const first = await createSubject(uow, { projectId: project.id, name: 'First subject' });
+    const second = await createSubject(uow, { projectId: project.id, name: 'Second subject' });
+    const input = {
+      appDir: dir,
+      projectId: project.id,
+      type: 'document' as const,
+      relPath: 'shared.md',
+      contentKind: 'markdown',
+      content: 'Shared subject evidence.',
+    };
+    const firstResult = await ingestFile(uow, { ...input, ticketId: first.id });
+    await ingestFile(uow, { ...input, ticketId: second.id });
+
+    const point = points.at(-1);
+    assert.ok(point);
+    assert.equal(point.payload.snapshot_id, firstResult.snapshot.id);
+    assert.deepEqual(point.payload.subject_ids?.sort(), [first.id, second.id].sort());
+    db.close();
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('subject lexical search prefers matching evidence and falls back to project-only evidence', async () => {
+  const dir = tempDir();
+  try {
+    const db = openDb(dir);
+    const uow = new SqliteUnitOfWork(db);
+    const project = await createProject(uow, { slug: 'scoped', name: 'Scoped' });
+    const legacy = await createTicket(uow, {
+      projectId: project.id,
+      key: 'LEGACY',
+      title: 'Legacy context',
+    });
+    const first = await createSubject(uow, { projectId: project.id, name: 'First subject' });
+    const second = await createSubject(uow, { projectId: project.id, name: 'Second subject' });
+    const ingest = (ticketId: string, content: string, relPath: string) =>
+      ingestFile(uow, {
+        appDir: dir,
+        projectId: project.id,
+        ticketId,
+        type: 'document',
+        relPath,
+        contentKind: 'markdown',
+        content,
+      });
+    await ingest(first.id, 'Evidence for first subject.', 'first.md');
+    await ingest(second.id, 'Evidence for second subject.', 'second.md');
+    await ingest(legacy.id, 'Legacy project evidence.', 'legacy.md');
+
+    const hits = await uow.search.search('evidence', project.id, 10, first.id);
+    assert.equal(hits[0]?.relPath, 'first.md');
+    assert.ok(hits.some((hit) => hit.relPath === 'legacy.md'));
+    assert.equal(
+      hits.some((hit) => hit.relPath === 'second.md'),
+      false,
+    );
     db.close();
   } finally {
     rmSync(dir, { recursive: true, force: true });

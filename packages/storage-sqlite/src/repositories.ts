@@ -1419,29 +1419,58 @@ export class SqliteSearchRepository implements SearchRepository {
     this.db = db;
   }
 
-  async search(query: string, projectId: string, limit = 10): Promise<SearchResult[]> {
+  async search(
+    query: string,
+    projectId: string,
+    limit = 10,
+    subjectId?: string,
+  ): Promise<SearchResult[]> {
     const match = escapeFtsQuery(query);
     if (match.length === 0) {
       return [];
     }
     const rows = this.db
       .prepare(
-        `SELECT chunk_id, snapshot_id, project_id, content, location, rel_path, bm25(chunks_fts) AS score
-         FROM chunks_fts
-         WHERE chunks_fts MATCH ? AND project_id = ?
-         ORDER BY score
-         LIMIT ?`,
+        `SELECT DISTINCT f.chunk_id, f.snapshot_id, f.project_id, f.content, f.location, f.rel_path,
+                bm25(chunks_fts) AS score
+         FROM chunks_fts f
+         WHERE chunks_fts MATCH ? AND f.project_id = ?
+           AND (? IS NULL OR EXISTS (
+             SELECT 1 FROM sources current_src
+             JOIN subjects current_subject ON current_subject.id = current_src.ticket_id
+             WHERE current_src.snapshot_id = f.snapshot_id AND current_subject.id = ?
+           ) OR NOT EXISTS (
+             SELECT 1 FROM sources any_src
+             JOIN subjects any_subject ON any_subject.id = any_src.ticket_id
+             WHERE any_src.snapshot_id = f.snapshot_id
+           ))
+         ORDER BY CASE WHEN ? IS NOT NULL AND EXISTS (
+           SELECT 1 FROM sources src
+           JOIN subjects subj ON subj.id = src.ticket_id
+           WHERE src.snapshot_id = f.snapshot_id AND subj.id = ?
+         ) THEN 0 ELSE 1 END, score
+          LIMIT ?`,
       )
-      .all(match, projectId, limit) as Row[];
-    return rows.map((row) => ({
-      chunkId: String(row.chunk_id),
-      snapshotId: String(row.snapshot_id),
-      projectId: String(row.project_id),
-      content: String(row.content),
-      location: row.location == null ? null : String(row.location),
-      relPath: row.rel_path == null ? null : String(row.rel_path),
-      score: Number(row.score),
-    }));
+      .all(
+        match,
+        projectId,
+        subjectId ?? null,
+        subjectId ?? null,
+        subjectId ?? null,
+        subjectId ?? null,
+        subjectId ? Math.max(limit * 10, 100) : limit,
+      ) as Row[];
+    return rows
+      .map((row) => ({
+        chunkId: String(row.chunk_id),
+        snapshotId: String(row.snapshot_id),
+        projectId: String(row.project_id),
+        content: String(row.content),
+        location: row.location == null ? null : String(row.location),
+        relPath: row.rel_path == null ? null : String(row.rel_path),
+        score: Number(row.score),
+      }))
+      .slice(0, limit);
   }
 }
 
@@ -1527,7 +1556,12 @@ export class SqliteVectorRepository implements VectorIndexRepository {
     tx();
   }
 
-  async search(query: string, projectId: string, limit = 10): Promise<SearchResult[]> {
+  async search(
+    query: string,
+    projectId: string,
+    limit = 10,
+    subjectId?: string,
+  ): Promise<SearchResult[]> {
     if (!this.embedder) return [];
     const [queryEmbedding] = await this.embedder.embedTexts([query]);
     const queryVector = queryEmbedding?.vector;
@@ -1541,17 +1575,19 @@ export class SqliteVectorRepository implements VectorIndexRepository {
              WHERE embedding MATCH ? AND k = ? AND project_id = ?
              ORDER BY distance`,
           )
-          .all(vectorBuffer(queryVector), limit, projectId) as Row[];
+          .all(vectorBuffer(queryVector), Math.max(limit * 10, 100), projectId) as Row[];
         if (rows.length > 0) {
-          return rows.map((row) => ({
-            chunkId: String(row.chunk_id),
-            snapshotId: String(row.snapshot_id),
-            projectId: String(row.project_id),
-            content: String(row.content),
-            location: row.location == null ? null : String(row.location),
-            relPath: row.rel_path == null ? null : String(row.rel_path),
-            score: Number(row.distance),
-          }));
+          return selectScopedVectorResults(rows, projectId, subjectId, limit, this.db, true).map(
+            (row) => ({
+              chunkId: String(row.chunk_id),
+              snapshotId: String(row.snapshot_id),
+              projectId: String(row.project_id),
+              content: String(row.content),
+              location: row.location == null ? null : String(row.location),
+              relPath: row.rel_path == null ? null : String(row.rel_path),
+              score: Number(row.distance),
+            }),
+          );
         }
       } catch {
         // Fall back to the persisted cosine path below.
@@ -1563,27 +1599,89 @@ export class SqliteVectorRepository implements VectorIndexRepository {
       JOIN snapshots s ON s.id = c.snapshot_id WHERE v.project_id = ?`)
       .all(projectId) as Row[];
     const norm = Math.sqrt(queryVector.reduce((sum, value) => sum + value * value, 0)) || 1;
-    return rows
-      .map((row) => {
+    return selectScopedVectorResults(
+      rows.map((row) => {
         const vector = bufferVector(row.embedding);
         const denominator =
           (Math.sqrt(vector.reduce((sum, value) => sum + value * value, 0)) || 1) * norm;
         const score =
           vector.reduce((sum, value, index) => sum + value * (queryVector[index] ?? 0), 0) /
           denominator;
-        return {
-          chunkId: String(row.chunk_id),
-          snapshotId: String(row.snapshot_id),
-          projectId: String(row.project_id),
-          content: String(row.content),
-          location: row.location == null ? null : String(row.location),
-          relPath: String(row.rel_path),
-          score,
-        };
-      })
-      .sort((a, b) => b.score - a.score)
-      .slice(0, Math.max(0, limit));
+        return { ...row, score };
+      }),
+      projectId,
+      subjectId,
+      limit,
+      this.db,
+      false,
+    ).map((row) => ({
+      chunkId: String(row.chunk_id),
+      snapshotId: String(row.snapshot_id),
+      projectId: String(row.project_id),
+      content: String(row.content),
+      location: row.location == null ? null : String(row.location),
+      relPath: row.rel_path == null ? null : String(row.rel_path),
+      score: Number(row.score),
+    }));
   }
+}
+
+function selectScopedVectorResults(
+  rows: Row[],
+  projectId: string,
+  subjectId: string | undefined,
+  limit: number,
+  db: Database.Database,
+  distanceIsBetter: boolean,
+): Row[] {
+  const scoped = rows.filter((row) => String(row.project_id) === projectId);
+  if (!subjectId) {
+    return scoped
+      .sort((a, b) =>
+        distanceIsBetter ? Number(a.score) - Number(b.score) : Number(b.score) - Number(a.score),
+      )
+      .slice(0, limit);
+  }
+  const subjectSnapshots = new Set(
+    (
+      db
+        .prepare(
+          `SELECT DISTINCT src.snapshot_id FROM sources src
+           JOIN subjects subj ON subj.id = src.ticket_id
+           WHERE subj.id = ?`,
+        )
+        .all(subjectId) as Array<{ snapshot_id: unknown }>
+    ).map((row) => String(row.snapshot_id)),
+  );
+  const projectSubjectSnapshots = new Set(
+    (
+      db
+        .prepare(
+          `SELECT DISTINCT src.snapshot_id FROM sources src
+           JOIN subjects subj ON subj.id = src.ticket_id
+           JOIN snapshots snap ON snap.id = src.snapshot_id
+           WHERE snap.project_id = ?`,
+        )
+        .all(projectId) as Array<{ snapshot_id: unknown }>
+    ).map((row) => String(row.snapshot_id)),
+  );
+  const subjectResults = scoped.filter((row) => subjectSnapshots.has(String(row.snapshot_id)));
+  const fallbackResults = scoped.filter(
+    (row) => !projectSubjectSnapshots.has(String(row.snapshot_id)),
+  );
+  return [...subjectResults, ...fallbackResults]
+    .sort((a, b) => {
+      const subjectRank = (row: Row) => (subjectSnapshots.has(String(row.snapshot_id)) ? 0 : 1);
+      const scoreOrder = distanceIsBetter
+        ? Number(a.distance ?? a.score) - Number(b.distance ?? b.score)
+        : Number(b.score ?? b.distance) - Number(a.score ?? a.distance);
+      return subjectRank(a) - subjectRank(b) || scoreOrder;
+    })
+    .filter(
+      (row, index, all) =>
+        all.findIndex((candidate) => candidate.chunk_id === row.chunk_id) === index,
+    )
+    .slice(0, limit);
 }
 
 export class SqliteUnitOfWork implements UnitOfWork {
@@ -1636,12 +1734,14 @@ export class SqliteUnitOfWork implements UnitOfWork {
         : new SqliteVectorRepository(db, options.embedder);
     this.search = options.embedder
       ? {
-          async search(query, projectId, limit = 10) {
+          async search(query, projectId, limit = 10, subjectId) {
             try {
-              const results = await vectorSearch.search(query, projectId, limit);
-              return results.length > 0 ? results : lexicalSearch.search(query, projectId, limit);
+              const results = await vectorSearch.search(query, projectId, limit, subjectId);
+              return results.length > 0
+                ? results
+                : lexicalSearch.search(query, projectId, limit, subjectId);
             } catch {
-              return lexicalSearch.search(query, projectId, limit);
+              return lexicalSearch.search(query, projectId, limit, subjectId);
             }
           },
         }

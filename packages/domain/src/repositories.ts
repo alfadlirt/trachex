@@ -152,13 +152,23 @@ export interface AgentRepository {
 }
 
 export interface SearchRepository {
-  search(query: string, projectId: string, limit?: number): Promise<SearchResult[]>;
+  search(
+    query: string,
+    projectId: string,
+    limit?: number,
+    subjectId?: string,
+  ): Promise<SearchResult[]>;
 }
 
 export interface VectorIndexRepository {
   readonly available: boolean;
   indexSnapshot(snapshotId: string): Promise<void>;
-  search(query: string, projectId: string, limit?: number): Promise<SearchResult[]>;
+  search(
+    query: string,
+    projectId: string,
+    limit?: number,
+    subjectId?: string,
+  ): Promise<SearchResult[]>;
 }
 
 export interface VectorEmbedder {

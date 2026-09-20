@@ -85,17 +85,6 @@ export const tools: ToolDef[] = [
     handler: async (ctx, input) => {
       const { ticketKey } = input as { ticketKey: string };
       const ticket = await requireTicket(ctx, ticketKey);
-      const currentRequirements = JSON.stringify(
-        (await ctx.uow.requirements.listByTicket(ticket.id)).map((requirement) => ({
-          id: requirement.id,
-          title: requirement.title,
-          description: requirement.description,
-          lifecycleStatus: requirement.lifecycleStatus,
-          devStatus: requirement.devStatus,
-        })),
-        null,
-        2,
-      );
       const checklist = await ctx.uow.requirements.listActiveByTicket(ticket.id);
       return { ticketKey, checklist };
     },
@@ -211,6 +200,7 @@ export const tools: ToolDef[] = [
         note: string;
       };
       const ticket = await requireTicket(ctx, ticketKey);
+      const subject = await ctx.uow.subjects.findById(ticket.id);
       const currentRequirements = JSON.stringify(
         (await ctx.uow.requirements.listByTicket(ticket.id)).map((requirement) => ({
           id: requirement.id,
@@ -229,11 +219,12 @@ export const tools: ToolDef[] = [
           appDir: ctx.appDir,
           projectId: ctx.projectId,
           ticketId: ticket.id,
+          ...(subject ? { subjectId: subject.id } : {}),
           type: source,
-           ...(attribution !== undefined ? { attribution } : {}),
-           note,
-           currentRequirements,
-           relPath: 'note',
+          ...(attribution !== undefined ? { attribution } : {}),
+          note,
+          currentRequirements,
+          relPath: 'note',
           contentKind: 'text',
           content: note,
         },

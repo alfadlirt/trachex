@@ -53,7 +53,7 @@ export function buildRunAgent(ctx: ApiContext, env: NodeJS.ProcessEnv = process.
       args.outputSchema,
     );
     const retrievalPrompt = args.projectId
-      ? `\n\nBefore producing the proposal, call vectorSearch with query summarizing the adjustment and projectId "${args.projectId}". Use the returned indexed evidence when reconciling; do not invent a different projectId.`
+      ? `\n\nBefore producing the proposal, call vectorSearch with query summarizing the adjustment, projectId "${args.projectId}"${args.subjectId ? `, and subjectId "${args.subjectId}"` : ''}. Use the returned indexed evidence when reconciling; do not invent a different projectId or subjectId.`
       : '';
     return retryTransientAgentCall(() =>
       runAgentWithSchema(agent, { prompt: `${args.userContent}${retrievalPrompt}` }),
