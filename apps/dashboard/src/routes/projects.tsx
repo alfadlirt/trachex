@@ -1,6 +1,7 @@
 import { createRoute, Link } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { api, type Project } from '../lib/api.ts';
+import { toSnakeCase } from '../lib/utils.ts';
 import { rootRoute } from './__root.tsx';
 
 export const projectsRoute = createRoute({
@@ -19,7 +20,13 @@ function ProjectsPage() {
   useEffect(() => {
     api
       .listProjects()
-      .then((r) => setProjects(r.projects))
+      .then((r) => {
+        setProjects((current) => {
+          const projectsById = new Map(current.map((project) => [project.id, project]));
+          for (const project of r.projects) projectsById.set(project.id, project);
+          return [...projectsById.values()];
+        });
+      })
       .catch((e) => setError(String(e)))
       .finally(() => setLoading(false));
   }, []);
@@ -66,15 +73,21 @@ function ProjectsPage() {
       <div className="flex flex-col gap-3 border-b border-zinc-200 bg-zinc-50/70 px-5 py-4 sm:flex-row sm:items-end sm:px-8">
         <input
           className="min-h-11 rounded-md border border-zinc-300 bg-white px-3 text-sm"
-          placeholder="slug"
-          value={slug}
-          onChange={(e) => setSlug(e.target.value)}
+          placeholder="name"
+          aria-label="Project name"
+          value={name}
+          onChange={(e) => {
+            const nextName = e.target.value;
+            setName(nextName);
+            setSlug(toSnakeCase(nextName));
+          }}
         />
         <input
           className="min-h-11 rounded-md border border-zinc-300 bg-white px-3 text-sm"
-          placeholder="name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
+          placeholder="slug"
+          aria-label="Project slug"
+          value={slug}
+          readOnly
         />
         <button
           type="button"

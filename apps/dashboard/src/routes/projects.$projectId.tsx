@@ -1,6 +1,7 @@
 import { createRoute, Link, useParams } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { api, type Project, type Ticket } from '../lib/api.ts';
+import { toSnakeCase } from '../lib/utils.ts';
 import { rootRoute } from './__root.tsx';
 
 export const projectTicketsRoute = createRoute({
@@ -99,15 +100,21 @@ function ProjectTicketsPage() {
       <div className="flex flex-col gap-3 border-b border-zinc-200 bg-zinc-50/70 px-5 py-4 sm:flex-row sm:items-end sm:px-8">
         <input
           className="min-h-11 rounded-md border border-zinc-300 bg-white px-3 text-sm"
-          placeholder="key"
-          value={key}
-          onChange={(e) => setKey(e.target.value)}
+          placeholder="subject name"
+          aria-label="Subject name"
+          value={title}
+          onChange={(e) => {
+            const nextTitle = e.target.value;
+            setTitle(nextTitle);
+            setKey(toSnakeCase(nextTitle));
+          }}
         />
         <input
           className="min-h-11 rounded-md border border-zinc-300 bg-white px-3 text-sm"
-          placeholder="title"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
+          placeholder="slug"
+          aria-label="Subject slug"
+          value={key}
+          readOnly
         />
         <button
           type="button"
