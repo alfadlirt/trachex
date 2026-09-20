@@ -5,8 +5,10 @@ import { createConsoleLogger, createLoggerObserver } from '@anvia/logger';
 export interface ObservabilityEnv {
   ANVIA_LENS_ENABLED?: string;
   ANVIA_LENS_API_URL?: string;
+  ANVIA_LENS_BASE_URL?: string;
   ANVIA_LENS_PUBLIC_KEY?: string;
   ANVIA_LENS_SECRET_KEY?: string;
+  ANVIA_LENS_SERVICE_NAME?: string;
 }
 
 export function buildObservability(
@@ -16,9 +18,10 @@ export function buildObservability(
 
   if (env.ANVIA_LENS_ENABLED === 'true' || env.ANVIA_LENS_ENABLED === '1') {
     const client = new LensClient({
-      baseUrl: env.ANVIA_LENS_API_URL,
+      baseUrl: env.ANVIA_LENS_API_URL ?? env.ANVIA_LENS_BASE_URL,
       publicKey: env.ANVIA_LENS_PUBLIC_KEY,
       secretKey: env.ANVIA_LENS_SECRET_KEY,
+      serviceName: env.ANVIA_LENS_SERVICE_NAME ?? 'trachex',
     });
     observers.lens = client.observer();
   }
