@@ -6,6 +6,7 @@ import { test } from 'node:test';
 import { createProject, createTicket } from '@trachex/domain';
 import type Database from 'better-sqlite3';
 import { ingestFile, migrate, openDatabase, SqliteUnitOfWork } from './index.ts';
+import type { QdrantPoint } from './qdrant.ts';
 
 function tempDir(): string {
   return mkdtempSync(join(tmpdir(), 'trachex-ingest-'));
@@ -94,6 +95,54 @@ test('vector index scopes semantic results and preserves provenance', async () =
     assert.equal(hits.length, 1);
     assert.equal(hits[0]?.relPath, 'docs/vector.md');
     assert.equal(hits[0]?.projectId, project.id);
+    db.close();
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('qdrant backend indexes an ingested upload through the owning unit of work', async () => {
+  const dir = tempDir();
+  try {
+    const db = openDb(dir);
+    const points: QdrantPoint[] = [];
+    const embedder = {
+      async embedTexts(texts: string[]) {
+        return texts.map(() => ({
+          vector: Array.from({ length: 384 }, (_, i) => (i === 0 ? 1 : 0)),
+        }));
+      },
+    };
+    const qdrantClient = {
+      async upsert(batch: QdrantPoint[]) {
+        points.push(...batch);
+      },
+      async search() {
+        return [];
+      },
+      async deleteCollection() {},
+    };
+    const uow = new SqliteUnitOfWork(db, {
+      embedder,
+      vectorBackend: 'qdrant',
+      qdrantClient,
+    });
+    const { project, ticket } = await seed(uow);
+    const result = await ingestFile(uow, {
+      appDir: dir,
+      projectId: project.id,
+      ticketId: ticket.id,
+      type: 'clarification',
+      relPath: 'upload.md',
+      contentKind: 'markdown',
+      content: 'Uploaded clarification content.',
+    });
+
+    assert.ok(points.length >= 1);
+    const point = points[0];
+    assert.ok(point);
+    assert.equal(point.payload.snapshot_id, result.snapshot.id);
+    assert.equal(point.payload.rel_path, 'upload.md');
     db.close();
   } finally {
     rmSync(dir, { recursive: true, force: true });

@@ -32,6 +32,14 @@ export TRACHEX_PROVIDER=openai        # openai | anthropic | gemini | ollama
 export OPENAI_BASE_URL=https://api.openai.com/v1
 export OPENAI_API_KEY=sk-...
 export TRACHEX_MODEL=gpt-4o-mini
+
+# Uploads are ingested and indexed by the API process. Configure these
+# variables wherever the API is running (configuring them only on the worker
+# does not move upload vectors to Qdrant).
+export TRACHEX_VECTOR_BACKEND=qdrant
+export QDRANT_URL=http://localhost:6333
+export QDRANT_COLLECTION=trachex
+# export QDRANT_API_KEY=...
 ```
 
 For a local Ollama:

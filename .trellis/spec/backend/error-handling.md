@@ -101,3 +101,72 @@ unbounded offline Redis queue for a request-scoped enqueue connection.
 - Verify worker/provider failures remain job failures rather than synchronous
   upload responses.
 - Verify queue connection cleanup completes after Redis is unavailable.
+
+## Vector Backend Boundary
+
+### 1. Scope / Trigger
+
+Upload ingestion and semantic indexing cross the API, embedding runtime, and
+Qdrant process boundary. The API owns upload-time indexing; the worker receives
+an already-ingested source and must not perform a second indexing pass.
+
+### 2. Signatures
+
+- `resolveVectorBackend(env)` selects `sqlite` by default or creates a Qdrant
+  client for `TRACHEX_VECTOR_BACKEND=qdrant`.
+- `createLazyLocalEmbedder().embedTexts(texts)` lazily loads the local Anvia
+  embedding model.
+- `QdrantClient.upsert(points)` ensures the configured collection exists before
+  writing points.
+
+### 3. Contracts
+
+- The API process must receive `TRACHEX_VECTOR_BACKEND`, `QDRANT_URL`,
+  `QDRANT_COLLECTION`, and optional `QDRANT_API_KEY`; worker-only configuration
+  does not affect upload-time indexing.
+- The Anvia Transformers adapter must call
+  `loadTransformersEmbeddingModel({ modelId })`, using the package's
+  `DEFAULT_TRANSFORMERS_EMBEDDING_MODEL`.
+- A successful upload creates or updates the configured Qdrant collection with
+  384-dimensional vectors and provenance payload fields.
+
+### 4. Validation & Error Matrix
+
+| Condition | Result |
+| --- | --- |
+| Backend unset or not `qdrant` | SQLite vector backend is used |
+| API Qdrant config is valid and embedding succeeds | Collection is ensured and points are upserted |
+| Embedding loader or Qdrant request fails during ingestion | Canonical source persistence succeeds; semantic retrieval falls back to lexical search |
+| Worker has Qdrant config but API does not | Upload is not indexed in Qdrant; worker configuration cannot move an existing source |
+
+### 5. Good / Base / Bad Cases
+
+- Good: configure Qdrant in the API environment and let the client lazily
+  ensure the collection on the first successful embedding.
+- Base: leave the backend unset and use the SQLite vector index without Docker.
+- Bad: call the Anvia loader without its required `{ modelId }` option or
+  configure Qdrant only on the worker.
+
+### 6. Tests Required
+
+- Assert configured Qdrant ingestion calls `upsert` with uploaded snapshot and
+  path provenance.
+- Assert SQLite remains the default backend.
+- Assert the embedding adapter passes the Anvia package default model ID.
+- Assert worker processing does not re-ingest or re-index an existing source.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+loadTransformersEmbeddingModel();
+```
+
+#### Correct
+
+```ts
+loadTransformersEmbeddingModel({
+  modelId: module.DEFAULT_TRANSFORMERS_EMBEDDING_MODEL,
+});
+```
