@@ -12,6 +12,7 @@ import type { EvalReport, EvalScore } from './harness.ts';
 
 export interface EvalLensEnv {
   ANVIA_LENS_ENABLED?: string;
+  ANVIA_LENS_API_URL?: string;
   ANVIA_LENS_BASE_URL?: string;
   ANVIA_LENS_PUBLIC_KEY?: string;
   ANVIA_LENS_SECRET_KEY?: string;
@@ -56,11 +57,12 @@ export async function reportToLens(
   const enabled =
     env.ANVIA_LENS_ENABLED === 'true' ||
     env.ANVIA_LENS_ENABLED === '1' ||
+    env.ANVIA_LENS_API_URL !== undefined ||
     env.ANVIA_LENS_BASE_URL !== undefined;
   if (!enabled) return;
 
   const client = new LensClient({
-    baseUrl: env.ANVIA_LENS_BASE_URL,
+    baseUrl: env.ANVIA_LENS_API_URL ?? env.ANVIA_LENS_BASE_URL,
     publicKey: env.ANVIA_LENS_PUBLIC_KEY,
     secretKey: env.ANVIA_LENS_SECRET_KEY,
     serviceName: env.ANVIA_LENS_SERVICE_NAME ?? 'trachex',
