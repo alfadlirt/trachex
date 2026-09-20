@@ -1059,8 +1059,7 @@ function ProposedOrderPanel({
   if (!review.proposedOrder) return null;
   const order = review.proposedOrder;
   const titles = order.orderedIds.map(
-    (id, index) =>
-      `${index + 1}. ${checklist.find((item) => item.id === id)?.title ?? `Unknown item (${id.slice(0, 8)})`}`,
+    (id) => checklist.find((item) => item.id === id)?.title ?? `Unknown item (${id.slice(0, 8)})`,
   );
   return (
     <div className="rounded-md border border-amber-200 bg-white p-3">
