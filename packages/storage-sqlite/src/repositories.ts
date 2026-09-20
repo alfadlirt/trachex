@@ -154,6 +154,8 @@ function adjustmentJobFromRow(row: Row): AdjustmentJob {
     attempts: Number(row.attempts),
     error: row.error == null ? null : String(row.error),
     proposalId: row.proposal_id == null ? null : String(row.proposal_id),
+    fileName: row.file_name == null ? null : String(row.file_name),
+    fileKind: row.file_kind == null ? null : String(row.file_kind),
   };
 }
 
@@ -364,30 +366,13 @@ export class SqliteProjectRepository implements ProjectRepository {
         this.db.prepare('SELECT id FROM tickets WHERE project_id = ?').all(id) as Row[]
       ).map((row) => String(row.id));
       for (const ticketId of ticketIds) {
-        const proposalIds = (
-          this.db.prepare('SELECT id FROM proposals WHERE ticket_id = ?').all(ticketId) as Row[]
-        ).map((row) => String(row.id));
-        for (const proposalId of proposalIds)
-          this.db.prepare('DELETE FROM proposal_versions WHERE proposal_id = ?').run(proposalId);
-        this.db.prepare('DELETE FROM proposals WHERE ticket_id = ?').run(ticketId);
-        const requirementIds = (
-          this.db.prepare('SELECT id FROM requirements WHERE ticket_id = ?').all(ticketId) as Row[]
-        ).map((row) => String(row.id));
-        for (const requirementId of requirementIds) {
-          this.db
-            .prepare('DELETE FROM completion_audits WHERE requirement_id = ?')
-            .run(requirementId);
-          this.db.prepare('DELETE FROM impacts WHERE requirement_id = ?').run(requirementId);
-          this.db.prepare('DELETE FROM scenarios WHERE requirement_id = ?').run(requirementId);
-        }
-        this.db
-          .prepare(
-            'DELETE FROM requirement_relationships WHERE from_requirement_id IN (SELECT id FROM requirements WHERE ticket_id = ?) OR to_requirement_id IN (SELECT id FROM requirements WHERE ticket_id = ?)',
-          )
-          .run(ticketId, ticketId);
-        this.db.prepare('DELETE FROM requirements WHERE ticket_id = ?').run(ticketId);
+        deleteSessionRows(this.db, ticketId);
+        deleteAdjustmentJobRows(this.db, ticketId);
+        deleteAgentScopedRows(this.db, ticketId);
+        deleteRequirementRows(this.db, ticketId);
+        deleteProposalRows(this.db, ticketId);
         this.db.prepare('DELETE FROM sources WHERE ticket_id = ?').run(ticketId);
-        this.db.prepare('DELETE FROM sessions WHERE ticket_id = ?').run(ticketId);
+        this.db.prepare('DELETE FROM export_artifacts WHERE ticket_id = ?').run(ticketId);
         this.db.prepare('DELETE FROM tickets WHERE id = ?').run(ticketId);
       }
       // Repository paths and subject assignments reference repositories and
@@ -565,6 +550,20 @@ export class SqliteTicketRepository implements TicketRepository {
       .run(ticket.title, ticket.description, ticket.updatedAt, ticket.id);
     return ticket;
   }
+
+  async permanentDelete(id: string, force: boolean): Promise<void> {
+    if (!force) throw new Error('permanent ticket deletion requires force');
+    const tx = this.db.transaction(() => {
+      deleteSessionRows(this.db, id);
+      deleteAdjustmentJobRows(this.db, id);
+      deleteRequirementRows(this.db, id);
+      deleteProposalRows(this.db, id);
+      this.db.prepare('DELETE FROM sources WHERE ticket_id = ?').run(id);
+      this.db.prepare('DELETE FROM export_artifacts WHERE ticket_id = ?').run(id);
+      this.db.prepare('DELETE FROM tickets WHERE id = ?').run(id);
+    });
+    tx();
+  }
 }
 
 export class SqliteSubjectRepository implements SubjectRepository {
@@ -622,34 +621,71 @@ export class SqliteSubjectRepository implements SubjectRepository {
     if (!force) throw new Error('permanent subject deletion requires force');
     const tx = this.db.transaction(() => {
       this.db.prepare('DELETE FROM subject_repositories WHERE subject_id = ?').run(id);
-      const requirementIds = (
-        this.db.prepare('SELECT id FROM requirements WHERE ticket_id = ?').all(id) as Row[]
-      ).map((row) => String(row.id));
-      for (const requirementId of requirementIds) {
-        this.db
-          .prepare('DELETE FROM completion_audits WHERE requirement_id = ?')
-          .run(requirementId);
-        this.db.prepare('DELETE FROM impacts WHERE requirement_id = ?').run(requirementId);
-        this.db.prepare('DELETE FROM scenarios WHERE requirement_id = ?').run(requirementId);
-      }
-      this.db
-        .prepare(
-          'DELETE FROM requirement_relationships WHERE from_requirement_id IN (SELECT id FROM requirements WHERE ticket_id = ?) OR to_requirement_id IN (SELECT id FROM requirements WHERE ticket_id = ?)',
-        )
-        .run(id, id);
-      this.db.prepare('DELETE FROM requirements WHERE ticket_id = ?').run(id);
-      const proposalIds = (
-        this.db.prepare('SELECT id FROM proposals WHERE ticket_id = ?').all(id) as Row[]
-      ).map((row) => String(row.id));
-      for (const proposalId of proposalIds)
-        this.db.prepare('DELETE FROM proposal_versions WHERE proposal_id = ?').run(proposalId);
-      this.db.prepare('DELETE FROM proposals WHERE ticket_id = ?').run(id);
+      deleteAgentScopedRows(this.db, id);
+      deleteSessionRows(this.db, id);
+      deleteAdjustmentJobRows(this.db, id);
+      deleteRequirementRows(this.db, id);
+      deleteProposalRows(this.db, id);
       this.db.prepare('DELETE FROM sources WHERE ticket_id = ?').run(id);
+      this.db.prepare('DELETE FROM export_artifacts WHERE ticket_id = ?').run(id);
       this.db.prepare('DELETE FROM tickets WHERE id = ?').run(id);
       this.db.prepare('DELETE FROM subjects WHERE id = ?').run(id);
     });
     tx();
   }
+}
+
+/**
+ * Delete every row that hangs off a ticket while foreign keys are enforced.
+ * Sessions carry messages and error references, adjustment jobs reference the
+ * ticket source row, proposals reference sources and ticket-linked sessions,
+ * and requirements own audits, impacts, scenarios, and supersession links.
+ */
+function deleteSessionRows(db: Database.Database, ticketId: string): void {
+  db.prepare(
+    'DELETE FROM messages WHERE session_id IN (SELECT id FROM sessions WHERE ticket_id = ?)',
+  ).run(ticketId);
+  db.prepare(
+    'DELETE FROM errors WHERE session_id IN (SELECT id FROM sessions WHERE ticket_id = ?)',
+  ).run(ticketId);
+  db.prepare(
+    'DELETE FROM errors WHERE proposal_id IN (SELECT id FROM proposals WHERE ticket_id = ?)',
+  ).run(ticketId);
+  db.prepare('DELETE FROM sessions WHERE ticket_id = ?').run(ticketId);
+}
+
+function deleteAdjustmentJobRows(db: Database.Database, ticketId: string): void {
+  db.prepare('DELETE FROM adjustment_jobs WHERE ticket_id = ?').run(ticketId);
+}
+
+function deleteAgentScopedRows(db: Database.Database, subjectId: string): void {
+  db.prepare('DELETE FROM review_findings WHERE subject_id = ?').run(subjectId);
+  db.prepare('DELETE FROM agent_runs WHERE subject_id = ?').run(subjectId);
+  db.prepare('DELETE FROM evidence_references WHERE subject_id = ?').run(subjectId);
+}
+
+function deleteProposalRows(db: Database.Database, ticketId: string): void {
+  const proposalIds = (
+    db.prepare('SELECT id FROM proposals WHERE ticket_id = ?').all(ticketId) as Row[]
+  ).map((row) => String(row.id));
+  for (const proposalId of proposalIds)
+    db.prepare('DELETE FROM proposal_versions WHERE proposal_id = ?').run(proposalId);
+  db.prepare('DELETE FROM proposals WHERE ticket_id = ?').run(ticketId);
+}
+
+function deleteRequirementRows(db: Database.Database, ticketId: string): void {
+  const requirementIds = (
+    db.prepare('SELECT id FROM requirements WHERE ticket_id = ?').all(ticketId) as Row[]
+  ).map((row) => String(row.id));
+  for (const requirementId of requirementIds) {
+    db.prepare('DELETE FROM completion_audits WHERE requirement_id = ?').run(requirementId);
+    db.prepare('DELETE FROM impacts WHERE requirement_id = ?').run(requirementId);
+    db.prepare('DELETE FROM scenarios WHERE requirement_id = ?').run(requirementId);
+  }
+  db.prepare(
+    'DELETE FROM requirement_relationships WHERE from_requirement_id IN (SELECT id FROM requirements WHERE ticket_id = ?) OR to_requirement_id IN (SELECT id FROM requirements WHERE ticket_id = ?)',
+  ).run(ticketId, ticketId);
+  db.prepare('DELETE FROM requirements WHERE ticket_id = ?').run(ticketId);
 }
 
 export class SqliteSnapshotRepository implements SnapshotRepository {
@@ -753,7 +789,7 @@ export class SqliteAdjustmentJobRepository implements AdjustmentJobRepository {
   async create(job: AdjustmentJob): Promise<AdjustmentJob> {
     this.db
       .prepare(
-        `INSERT INTO adjustment_jobs (id, project_id, ticket_id, source_id, queue_job_id, status, source_type, attribution, source_location, created_at, updated_at, started_at, completed_at, attempts, error, proposal_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO adjustment_jobs (id, project_id, ticket_id, source_id, queue_job_id, status, source_type, attribution, source_location, created_at, updated_at, started_at, completed_at, attempts, error, proposal_id, file_name, file_kind) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         job.id,
@@ -772,6 +808,8 @@ export class SqliteAdjustmentJobRepository implements AdjustmentJobRepository {
         job.attempts,
         job.error,
         job.proposalId,
+        job.fileName,
+        job.fileKind,
       );
     return job;
   }
@@ -799,7 +837,7 @@ export class SqliteAdjustmentJobRepository implements AdjustmentJobRepository {
   async update(job: AdjustmentJob) {
     this.db
       .prepare(
-        `UPDATE adjustment_jobs SET queue_job_id=?, status=?, updated_at=?, started_at=?, completed_at=?, attempts=?, error=?, proposal_id=? WHERE id=?`,
+        `UPDATE adjustment_jobs SET queue_job_id=?, status=?, updated_at=?, started_at=?, completed_at=?, attempts=?, error=?, proposal_id=?, file_name=?, file_kind=? WHERE id=?`,
       )
       .run(
         job.queueJobId,
@@ -810,6 +848,8 @@ export class SqliteAdjustmentJobRepository implements AdjustmentJobRepository {
         job.attempts,
         job.error,
         job.proposalId,
+        job.fileName,
+        job.fileKind,
         job.id,
       );
     return job;

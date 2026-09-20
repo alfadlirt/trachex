@@ -4,7 +4,7 @@ export interface Migration {
   sql: string;
 }
 
-export const SCHEMA_VERSION = 10;
+export const SCHEMA_VERSION = 11;
 
 export const migrations: Migration[] = [
   {
@@ -348,6 +348,14 @@ CREATE TABLE adjustment_jobs (
 CREATE INDEX idx_adjustment_jobs_ticket ON adjustment_jobs(ticket_id, created_at);
 CREATE UNIQUE INDEX idx_adjustment_jobs_active_ticket ON adjustment_jobs(ticket_id)
   WHERE status IN ('queued', 'processing');
+`,
+  },
+  {
+    version: 11,
+    name: 'adjustment-job-file-metadata',
+    sql: `
+ALTER TABLE adjustment_jobs ADD COLUMN file_name TEXT;
+ALTER TABLE adjustment_jobs ADD COLUMN file_kind TEXT;
 `,
   },
 ];

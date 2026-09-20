@@ -54,6 +54,7 @@ export interface TicketRepository {
   findById(id: string): Promise<Ticket | null>;
   listByProject(projectId: string): Promise<Ticket[]>;
   update(ticket: Ticket): Promise<Ticket>;
+  permanentDelete?(id: string, force: boolean): Promise<void>;
 }
 
 export interface SubjectRepository {

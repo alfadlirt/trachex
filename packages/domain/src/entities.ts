@@ -39,6 +39,25 @@ export interface AdjustmentJob {
   attempts: number;
   error: string | null;
   proposalId: string | null;
+  fileName: string | null;
+  fileKind: string | null;
+}
+
+export interface Source {
+  id: string;
+  ticketId: string;
+  type: SourceType;
+  attribution: string | null;
+  sourceEventAt: IsoDateTime | null;
+  ingestedAt: IsoDateTime;
+  snapshotId: string | null;
+  location: string | null;
+  note: string | null;
+}
+
+export interface AdjustmentJobDetail {
+  job: AdjustmentJob;
+  source: Source | null;
 }
 
 export interface Project {

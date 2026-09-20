@@ -132,6 +132,91 @@ export async function archiveRequirement(uow: UnitOfWork, requirementId: string)
   await uow.requirements.archiveSubtree(requirementId);
 }
 
+export function slugifyName(value: string): string {
+  return value
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .toLowerCase();
+}
+
+export interface UpdateProjectInput {
+  projectId: string;
+  name?: string;
+  slug?: string;
+}
+
+export async function updateProject(uow: UnitOfWork, input: UpdateProjectInput): Promise<Project> {
+  const project = await uow.projects.findById(input.projectId);
+  if (!project) throw new NotFoundError('project', input.projectId);
+  const name = input.name !== undefined ? input.name.trim() : project.name;
+  const slug = input.slug !== undefined ? input.slug.trim().toLowerCase() : project.slug;
+  if (!name) throw new InvalidOperationError('project name must not be empty');
+  if (!slug) throw new InvalidOperationError('project slug must not be empty');
+  if (slug !== project.slug) {
+    const existing = await uow.projects.findBySlug(slug);
+    if (existing) throw new ConflictError(`project slug already exists: ${slug}`);
+  }
+  const now = nowIso();
+  return uow.projects.update({ ...project, name, slug, updatedAt: now });
+}
+
+export interface DeleteProjectInput {
+  projectId: string;
+  confirmName: string;
+}
+
+export async function deleteProject(uow: UnitOfWork, input: DeleteProjectInput): Promise<void> {
+  const project = await uow.projects.findById(input.projectId);
+  if (!project) throw new NotFoundError('project', input.projectId);
+  if (input.confirmName !== project.name) {
+    throw new InvalidOperationError('delete confirmation name does not match the project name');
+  }
+  if (!uow.projects.permanentDelete)
+    throw new InvalidOperationError('permanent project deletion is unavailable');
+  await uow.projects.permanentDelete(project.id, true);
+}
+
+export async function updateTicket(
+  uow: UnitOfWork,
+  input: { ticketId: string; title?: string; key?: string },
+): Promise<Ticket> {
+  const ticket = await uow.tickets.findById(input.ticketId);
+  if (!ticket) throw new NotFoundError('ticket', input.ticketId);
+  const title = input.title !== undefined ? input.title.trim() : ticket.title;
+  const key = input.key !== undefined ? input.key.trim() : ticket.key;
+  if (!title) throw new InvalidOperationError('ticket title must not be empty');
+  if (!key) throw new InvalidOperationError('ticket key must not be empty');
+  if (key !== ticket.key) {
+    const existing = await uow.tickets.findByProjectAndKey(ticket.projectId, key);
+    if (existing) throw new ConflictError(`ticket key already exists in project: ${key}`);
+  }
+  const now = nowIso();
+  return uow.tickets.update({ ...ticket, title, key, updatedAt: now });
+}
+
+export async function deleteSubjectByTicket(
+  uow: UnitOfWork,
+  input: { ticketId: string; confirmName: string },
+): Promise<void> {
+  const ticket = await uow.tickets.findById(input.ticketId);
+  if (!ticket) throw new NotFoundError('ticket', input.ticketId);
+  if (input.confirmName !== ticket.title) {
+    throw new InvalidOperationError('delete confirmation name does not match the subject title');
+  }
+  if (uow.subjects.permanentDelete) {
+    const subject = await uow.subjects.findById(ticket.id);
+    if (subject) {
+      await uow.subjects.permanentDelete(subject.id, true);
+      return;
+    }
+  }
+  if (!uow.tickets.permanentDelete)
+    throw new InvalidOperationError('permanent ticket deletion is unavailable');
+  await uow.tickets.permanentDelete(ticket.id, true);
+}
+
 export interface BaselineContext {
   subject: Subject;
   ticket: Ticket;
@@ -195,14 +280,22 @@ export interface RequirementDraft {
   supersedes?: string[];
 }
 
+export interface ProposedOrder {
+  orderedIds: string[];
+  rationale: string;
+  uncertainty?: string | null;
+}
+
 export interface ExtractionOutput {
   kind: 'extraction';
   requirements: RequirementDraft[];
+  proposedOrder?: ProposedOrder | null;
 }
 
 export interface ReconciliationOutput {
   kind: 'reconciliation';
   create: RequirementDraft[];
+  proposedOrder?: ProposedOrder | null;
 }
 
 export type ProposalOutput = ExtractionOutput | ReconciliationOutput;
@@ -234,6 +327,8 @@ export interface ProposalReview {
   isEdited: boolean;
   version: number;
   supersessionTargets: ProposalReviewTarget[];
+  proposedOrder: ProposedOrder | null;
+  orderState: 'none' | 'valid' | 'stale';
   error: string | null;
 }
 
@@ -312,6 +407,38 @@ function validateProposalOutput(output: unknown): asserts output is ProposalOutp
       }
     }
   }
+  const order = (typedOutput as { proposedOrder?: unknown }).proposedOrder;
+  if (order !== undefined && order !== null) {
+    validateProposedOrder(order);
+  }
+}
+
+export function validateProposedOrder(order: unknown): asserts order is ProposedOrder {
+  if (!order || typeof order !== 'object') {
+    throw new InvalidOperationError('proposal order must be an object');
+  }
+  const candidate = order as { orderedIds?: unknown; rationale?: unknown; uncertainty?: unknown };
+  if (!Array.isArray(candidate.orderedIds) || candidate.orderedIds.length === 0) {
+    throw new InvalidOperationError('proposal order requires a non-empty orderedIds list');
+  }
+  const seen = new Set<string>();
+  for (const id of candidate.orderedIds) {
+    if (typeof id !== 'string' || id.trim().length === 0) {
+      throw new InvalidOperationError('proposal order ids must be non-empty strings');
+    }
+    if (seen.has(id)) throw new InvalidOperationError('proposal order contains a duplicate id');
+    seen.add(id);
+  }
+  if (typeof candidate.rationale !== 'string' || candidate.rationale.trim().length === 0) {
+    throw new InvalidOperationError('proposal order requires a dependency rationale');
+  }
+  if (
+    candidate.uncertainty !== undefined &&
+    candidate.uncertainty !== null &&
+    typeof candidate.uncertainty !== 'string'
+  ) {
+    throw new InvalidOperationError('proposal order uncertainty must be a string');
+  }
 }
 
 function parseProposalOutput(value: string): ProposalOutput {
@@ -356,6 +483,8 @@ export async function buildProposalReviews(
       ? await uow.sources.findById(proposal.sourceId)
       : null;
     const source = candidateSource?.ticketId === ticketId ? candidateSource : null;
+    const activeNow = await uow.requirements.listActiveByTicket(ticketId);
+    const activeIds = new Set(activeNow.map((item) => item.id));
     const review: ProposalReview = {
       proposalId: proposal.id,
       kind: proposal.kind,
@@ -374,6 +503,8 @@ export async function buildProposalReviews(
       isEdited: false,
       version: 0,
       supersessionTargets: [],
+      proposedOrder: null,
+      orderState: 'none',
       error: null,
     };
     try {
@@ -392,6 +523,20 @@ export async function buildProposalReviews(
       const drafts = output.kind === 'extraction' ? output.requirements : output.create;
       review.drafts = drafts.map(reviewDraft);
       review.originalDrafts = originalDrafts.map(reviewDraft);
+      const proposedOrder = output.proposedOrder ?? null;
+      if (proposedOrder) {
+        review.proposedOrder = {
+          orderedIds: [...proposedOrder.orderedIds],
+          rationale: proposedOrder.rationale,
+          ...(proposedOrder.uncertainty !== undefined
+            ? { uncertainty: proposedOrder.uncertainty }
+            : {}),
+        };
+        const activeIdList = [...activeIds];
+        const coversActive = activeIdList.every((id) => proposedOrder.orderedIds.includes(id));
+        const onlyActive = proposedOrder.orderedIds.every((id) => activeIds.has(id));
+        review.orderState = coversActive && onlyActive ? 'valid' : 'stale';
+      }
       const targetIds = drafts.flatMap((draft) => draft.supersedes ?? []);
       for (const targetId of targetIds) {
         const target = await uow.requirements.findById(targetId);
@@ -741,10 +886,23 @@ export async function approveProposal(uow: UnitOfWork, input: ApproveProposalInp
   }
 
   if (output.kind === 'extraction') {
+    const createdIds: string[] = [];
     for (const draft of output.requirements) {
-      await createRequirementFromDraft(uow, ticket.projectId, ticket.id, proposal, draft, now);
+      const created = await createRequirementFromDraft(
+        uow,
+        ticket.projectId,
+        ticket.id,
+        proposal,
+        draft,
+        now,
+      );
+      createdIds.push(created.id);
     }
+    await applyProposedOrder(uow, ticket.id, output.proposedOrder ?? null, createdIds, null, now);
   } else if (output.kind === 'reconciliation') {
+    const createdIds: string[] = [];
+    const preApprovalActive = await uow.requirements.listActiveByTicket(ticket.id);
+    const preApprovalIds = new Set(preApprovalActive.map((item) => item.id));
     for (const draft of output.create) {
       const created = await createRequirementFromDraft(
         uow,
@@ -754,6 +912,7 @@ export async function approveProposal(uow: UnitOfWork, input: ApproveProposalInp
         draft,
         now,
       );
+      createdIds.push(created.id);
       for (const targetId of draft.supersedes ?? []) {
         const target = await uow.requirements.findById(targetId);
         // Targets were checked in the preflight above.
@@ -770,6 +929,14 @@ export async function approveProposal(uow: UnitOfWork, input: ApproveProposalInp
         });
       }
     }
+    await applyProposedOrder(
+      uow,
+      ticket.id,
+      output.proposedOrder ?? null,
+      createdIds,
+      preApprovalIds,
+      now,
+    );
   }
 
   await uow.proposals.update({ ...proposal, status: 'approved', updatedAt: now });
@@ -782,6 +949,49 @@ export async function approveProposal(uow: UnitOfWork, input: ApproveProposalInp
     reviewedAt: now,
     createdAt: now,
   });
+}
+
+async function applyProposedOrder(
+  uow: UnitOfWork,
+  ticketId: string,
+  proposedOrder: ProposedOrder | null,
+  createdIds: string[],
+  preApprovalIds: Set<string> | null,
+  now: string,
+): Promise<void> {
+  if (!proposedOrder) return;
+  const created = new Set(createdIds);
+  const active = await uow.requirements.listActiveByTicket(ticketId);
+  // Rank only the requirements the agent actually saw. Rows created by this
+  // approval and rows superseded by it are never part of the proposal's
+  // dependency order, so they keep their appended positions.
+  const rankable = new Set(
+    [...(preApprovalIds ?? new Set(active.map((item) => item.id)))].filter((id) => {
+      const row = active.find((item) => item.id === id);
+      return row !== undefined && row.lifecycleStatus === 'active' && !created.has(id);
+    }),
+  );
+  const ordered = proposedOrder.orderedIds.filter((id) => rankable.has(id));
+  if (ordered.length === 0) return;
+  const seen = new Set(ordered);
+  if (seen.size !== ordered.length) {
+    throw new InvalidOperationError('proposal order contains a duplicate id');
+  }
+  const orderedSet = new Set(ordered);
+  const trailing = active
+    .filter((item) => !orderedSet.has(item.id))
+    .sort((a, b) => a.displayOrder - b.displayOrder);
+  const sequence = [
+    ...ordered
+      .map((id) => active.find((item) => item.id === id))
+      .filter((item): item is Requirement => Boolean(item)),
+    ...trailing,
+  ];
+  for (let index = 0; index < sequence.length; index += 1) {
+    const item = sequence[index];
+    if (!item) continue;
+    await uow.requirements.update({ ...item, displayOrder: index, updatedAt: now });
+  }
 }
 
 async function createRequirementFromDraft(

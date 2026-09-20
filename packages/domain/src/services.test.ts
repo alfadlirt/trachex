@@ -33,6 +33,8 @@ import {
   createProject,
   createProposal,
   createTicket,
+  deleteProject,
+  deleteSubjectByTicket,
   type ExportRepository,
   editProposal,
   InvalidOperationError,
@@ -48,6 +50,9 @@ import {
   type SubjectRepository,
   type TicketRepository,
   type UnitOfWork,
+  updateProject,
+  updateTicket,
+  validateProposedOrder,
 } from './index.ts';
 
 class MemoryData {
@@ -135,6 +140,9 @@ class MemoryUnitOfWork implements UnitOfWork {
       const i = this.data.tickets.findIndex((t) => t.id === ticket.id);
       if (i >= 0) this.data.tickets[i] = ticket;
       return ticket;
+    },
+    permanentDelete: async (id) => {
+      this.data.tickets = this.data.tickets.filter((t) => t.id !== id);
     },
   };
 
@@ -386,6 +394,104 @@ test('extraction approval creates active unchecked requirements', async () => {
   assert.equal(reqs[0]?.projectId, project.id);
   const impacts = await uow.requirements.listImpactsByTicket(ticket.id);
   assert.equal(impacts.length, 1);
+});
+
+test('updateProject renames name and slug', async () => {
+  const uow = new MemoryUnitOfWork();
+  const { project } = await seedProjectTicket(uow);
+  const updated = await updateProject(uow, {
+    projectId: project.id,
+    name: 'Loyalty Program',
+    slug: 'loyalty-program',
+  });
+  assert.equal(updated.name, 'Loyalty Program');
+  assert.equal(updated.slug, 'loyalty-program');
+  await assert.rejects(
+    () => updateProject(uow, { projectId: project.id, name: '  ' }),
+    (e: unknown) => e instanceof InvalidOperationError,
+  );
+});
+
+test('deleteProject requires the exact project name', async () => {
+  const uow = new MemoryUnitOfWork();
+  const { project } = await seedProjectTicket(uow);
+  await assert.rejects(
+    () => deleteProject(uow, { projectId: project.id, confirmName: 'Wrong name' }),
+    (e: unknown) => e instanceof InvalidOperationError,
+  );
+  await assert.rejects(
+    () => deleteProject(uow, { projectId: project.id, confirmName: 'Loyalty' }),
+    (e: unknown) => e instanceof InvalidOperationError,
+  );
+});
+
+test('updateTicket renames title and key', async () => {
+  const uow = new MemoryUnitOfWork();
+  const { ticket } = await seedProjectTicket(uow);
+  const updated = await updateTicket(uow, {
+    ticketId: ticket.id,
+    title: 'Loyalty subject',
+    key: 'LOYALTY-EDITED',
+  });
+  assert.equal(updated.title, 'Loyalty subject');
+  assert.equal(updated.key, 'LOYALTY-EDITED');
+});
+
+test('deleteSubjectByTicket requires the exact subject title', async () => {
+  const uow = new MemoryUnitOfWork();
+  const { ticket } = await seedProjectTicket(uow);
+  await assert.rejects(
+    () => deleteSubjectByTicket(uow, { ticketId: ticket.id, confirmName: 'Wrong name' }),
+    (e: unknown) => e instanceof InvalidOperationError,
+  );
+  await deleteSubjectByTicket(uow, { ticketId: ticket.id, confirmName: ticket.title });
+  assert.equal(await uow.tickets.findById(ticket.id), null);
+});
+
+test('proposal order requires dependency rationale and unique ids', () => {
+  validateProposedOrder({
+    orderedIds: ['a', 'b'],
+    rationale: 'Foundations before dependents.',
+  });
+  assert.throws(() => validateProposedOrder({ orderedIds: ['a', 'a'], rationale: 'x' }));
+  assert.throws(() => validateProposedOrder({ orderedIds: ['a'], rationale: '  ' }));
+});
+
+test('approval applies the agent proposed order before appending new rows', async () => {
+  const uow = new MemoryUnitOfWork();
+  const { ticket } = await seedProjectTicket(uow);
+  const seed = await createProposal(uow, {
+    ticketId: ticket.id,
+    kind: 'extraction',
+    output: {
+      kind: 'extraction',
+      requirements: [{ title: 'Foundation check' }, { title: 'Dependent cap' }],
+    },
+  });
+  await approveProposal(uow, { proposalId: seed.id });
+  const before = await uow.requirements.listActiveByTicket(ticket.id);
+  assert.equal(before.length, 2);
+  const foundation = before.find((item) => item.title === 'Foundation check');
+  const dependent = before.find((item) => item.title === 'Dependent cap');
+  assert.ok(foundation);
+  assert.ok(dependent);
+
+  const proposal = await createProposal(uow, {
+    ticketId: ticket.id,
+    kind: 'reconciliation',
+    output: {
+      kind: 'reconciliation',
+      create: [{ title: 'Receipt evidence note' }],
+      proposedOrder: {
+        orderedIds: [dependent.id, foundation.id],
+        rationale: 'The cap decision depends on the foundation check.',
+      },
+    },
+  });
+  await approveProposal(uow, { proposalId: proposal.id });
+  const active = await uow.requirements.listActiveByTicket(ticket.id);
+  const titles = active.map((item) => item.title);
+  assert.deepEqual(titles, ['Dependent cap', 'Foundation check', 'Receipt evidence note']);
 });
 
 test('reconciliation approval supersedes the old requirement', async () => {
